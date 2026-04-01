@@ -1,0 +1,238 @@
+import 'flutter_local_notification_plugins_platform_interface.dart';
+import 'flutter_local_notification_plugins_method_channel.dart';
+import 'src/android_notification_details.dart';
+import 'src/local_notification_models.dart';
+
+export 'src/android_notification_details.dart';
+export 'src/local_notification_models.dart';
+
+class FlutterLocalNotificationPlugins {
+  static final FlutterLocalNotificationPlugins instance =
+      FlutterLocalNotificationPlugins();
+
+  /// 注册通知点击和悬浮层点击回调。
+  void setListeners({
+    void Function(LocalNotificationEvent event)? onNotificationClicked,
+    void Function(String taskId)? onProcessingOverlayClicked,
+  }) {
+    final platform = FlutterLocalNotificationPluginsPlatform.instance;
+    if (platform is MethodChannelFlutterLocalNotificationPlugins) {
+      if (onNotificationClicked != null) {
+        platform.onNotificationClicked = onNotificationClicked;
+      }
+      if (onProcessingOverlayClicked != null) {
+        platform.onProcessingOverlayClicked = onProcessingOverlayClicked;
+      }
+    }
+  }
+
+  /// 获取当前平台版本信息。
+  Future<String?> getPlatformVersion() {
+    return FlutterLocalNotificationPluginsPlatform.instance
+        .getPlatformVersion();
+  }
+
+  /// 取出并清空已展示通知数量。
+  Future<int> consumeDisplayedNotificationCount() {
+    return FlutterLocalNotificationPluginsPlatform.instance
+        .consumeDisplayedNotificationCount();
+  }
+
+  /// 检查悬浮层权限是否已开启。
+  Future<bool> checkOverlayPermission() {
+    return FlutterLocalNotificationPluginsPlatform.instance
+        .checkOverlayPermission();
+  }
+
+  /// 请求系统悬浮层权限。
+  Future<bool> requestOverlayPermission() {
+    return FlutterLocalNotificationPluginsPlatform.instance
+        .requestOverlayPermission();
+  }
+
+  /// 显示处理中的悬浮进度层。
+  Future<void> showProcessingOverlay({
+    required String taskId,
+    required String title,
+    required double progress,
+  }) {
+    return FlutterLocalNotificationPluginsPlatform.instance
+        .showProcessingOverlay(
+          taskId: taskId,
+          title: title,
+          progress: progress,
+        );
+  }
+
+  /// 更新处理中的悬浮进度层。
+  Future<void> updateProcessingOverlay({
+    required String taskId,
+    required String title,
+    required double progress,
+  }) {
+    return FlutterLocalNotificationPluginsPlatform.instance
+        .updateProcessingOverlay(
+          taskId: taskId,
+          title: title,
+          progress: progress,
+        );
+  }
+
+  /// 关闭处理中的悬浮进度层。
+  Future<void> closeProcessingOverlay() {
+    return FlutterLocalNotificationPluginsPlatform.instance
+        .closeProcessingOverlay();
+  }
+
+  /// 判断悬浮进度层是否仍在显示。
+  Future<bool> isProcessingOverlayActive() {
+    return FlutterLocalNotificationPluginsPlatform.instance
+        .isProcessingOverlayActive();
+  }
+
+  /// 取出并清空通过悬浮层拉起应用时的任务 ID。
+  Future<String?> consumeProcessingOverlayLaunchTaskId() {
+    return FlutterLocalNotificationPluginsPlatform.instance
+        .consumeProcessingOverlayLaunchTaskId();
+  }
+
+  /// 将应用切到后台。
+  Future<bool> moveAppToBack() {
+    return FlutterLocalNotificationPluginsPlatform.instance.moveAppToBack();
+  }
+
+  /// 获取通知点击拉起应用的启动信息。
+  Future<LocalNotificationAppLaunchDetails>
+  getNotificationAppLaunchDetails() async {
+    final result = await FlutterLocalNotificationPluginsPlatform.instance
+        .getNotificationAppLaunchDetails();
+    return LocalNotificationAppLaunchDetails.fromMap(result);
+  }
+
+  /// 订阅 FCM 主题并保存通知样式配置。
+  Future<bool> subscribeToTopic(
+    String topic, {
+    String channelId = 'focus_channel_fcm',
+    String channelName = 'focus_channel_name_fcm',
+    String? channelDescription,
+    Priority priority = Priority.high,
+    Importance importance = Importance.high,
+    String? style,
+    String? beautyTitle,
+    String? beautyBody,
+    String? beautyImage,
+    String? beautyButton,
+    String? beautyAppIcon,
+  }) {
+    return FlutterLocalNotificationPluginsPlatform.instance.subscribeToTopic(
+      topic: topic,
+      channelId: channelId,
+      channelName: channelName,
+      channelDescription: channelDescription,
+      priority: priority.index,
+      importance: importance.index,
+      style: style,
+      beautyTitle: beautyTitle,
+      beautyBody: beautyBody,
+      beautyImage: beautyImage,
+      beautyButton: beautyButton,
+      beautyAppIcon: beautyAppIcon,
+    );
+  }
+
+  /// 初始化通知通道和自定义布局配置。
+  Future<bool> initNotification({
+    String channelId = 'default_notification_channel',
+    String channelName = 'Notifications',
+    String? channelDescription,
+    AndroidCustomNotificationLayout? customLayout,
+  }) {
+    return FlutterLocalNotificationPluginsPlatform.instance.initNotification(
+      channelId: channelId,
+      channelName: channelName,
+      channelDescription: channelDescription,
+      customLayout: customLayout?.toMap(),
+    );
+  }
+
+  /// 显示常驻快捷入口通知。
+  Future<void> showPersistentShortcutNotification({
+    required String homeText,
+    required String mergeText,
+    required String importText,
+    required String convertText,
+    String homeIcon = 'home',
+    String mergeIcon = 'merge',
+    String importIcon = 'shortcut_import',
+    String convertIcon = 'convert',
+    AndroidPersistentShortcutLayout? customLayout,
+  }) {
+    return FlutterLocalNotificationPluginsPlatform.instance
+        .showPersistentShortcutNotification(
+          homeText: homeText,
+          mergeText: mergeText,
+          importText: importText,
+          convertText: convertText,
+          homeIcon: homeIcon,
+          mergeIcon: mergeIcon,
+          importIcon: importIcon,
+          convertIcon: convertIcon,
+          customLayout: customLayout?.toMap(),
+        );
+  }
+
+  /// 立即显示一条本地通知。
+  Future<void> show({
+    required int id,
+    String? title,
+    String? body,
+    String? payload,
+    String? clickPayload,
+  }) {
+    return FlutterLocalNotificationPluginsPlatform.instance.show(
+      id: id,
+      title: title,
+      body: body,
+      payload: payload,
+      clickPayload: clickPayload,
+    );
+  }
+
+  /// 按固定时间间隔循环展示通知。
+  Future<void> periodicallyShowWithDuration({
+    required int id,
+    String? title,
+    String? body,
+    required Duration repeatDurationInterval,
+    String? payload,
+    AndroidNotificationDetails? notificationDetails,
+    List<LocalNotificationContent>? notificationList,
+  }) {
+    return FlutterLocalNotificationPluginsPlatform.instance
+        .periodicallyShowWithDuration(
+          id: id,
+          title: title,
+          body: body,
+          repeatDurationInterval: repeatDurationInterval,
+          payload: payload,
+          notificationDetails: notificationDetails?.toMap(),
+          notificationList: notificationList
+              ?.map((value) => value.toMap())
+              .toList(growable: false),
+        );
+  }
+
+  /// 开启解锁触发的通知提醒。
+  Future<void> startUnlockTriggeredNotifications({
+    required Duration interval,
+    List<LocalNotificationContent>? notificationList,
+  }) {
+    return FlutterLocalNotificationPluginsPlatform.instance
+        .startUnlockTriggeredNotifications(
+          interval: interval,
+          notificationList: notificationList
+              ?.map((value) => value.toMap())
+              .toList(growable: false),
+        );
+  }
+}
