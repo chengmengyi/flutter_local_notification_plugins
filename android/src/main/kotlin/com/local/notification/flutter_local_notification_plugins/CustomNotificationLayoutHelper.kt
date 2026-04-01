@@ -113,8 +113,6 @@ object CustomNotificationLayoutHelper {
         builder.setCustomHeadsUpContentView(smallRemoteViews)
         if (payload == "media") {
             builder.setStyle(androidx.media.app.NotificationCompat.DecoratedMediaCustomViewStyle())
-        } else {
-            builder.setStyle(NotificationCompat.DecoratedCustomViewStyle())
         }
         return true
     }
