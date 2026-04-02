@@ -7,6 +7,14 @@ export 'src/android_notification_details.dart';
 export 'src/local_notification_models.dart';
 
 class FlutterLocalNotificationPlugins {
+  static const Duration _defaultLocalNotificationInterval = Duration(
+    minutes: 30,
+  );
+  static const Duration _defaultUnlockNotificationInterval = Duration(
+    minutes: 30,
+  );
+  static const Duration _defaultWorkManagerInterval = Duration(minutes: 60);
+
   static final FlutterLocalNotificationPlugins instance =
       FlutterLocalNotificationPlugins();
 
@@ -99,6 +107,14 @@ class FlutterLocalNotificationPlugins {
   /// 将应用切到后台。
   Future<bool> moveAppToBack() {
     return FlutterLocalNotificationPluginsPlatform.instance.moveAppToBack();
+  }
+
+  /// 配置 Android 的 WorkManager 循环间隔。
+  Future<void> configureAndroidWorkManager({
+    Duration interval = _defaultWorkManagerInterval,
+  }) {
+    return FlutterLocalNotificationPluginsPlatform.instance
+        .configureAndroidWorkManager(interval: interval);
   }
 
   /// 获取通知点击拉起应用的启动信息。
@@ -203,7 +219,7 @@ class FlutterLocalNotificationPlugins {
     required int id,
     String? title,
     String? body,
-    required Duration repeatDurationInterval,
+    Duration repeatDurationInterval = _defaultLocalNotificationInterval,
     String? payload,
     AndroidNotificationDetails? notificationDetails,
     List<LocalNotificationContent>? notificationList,
@@ -224,7 +240,7 @@ class FlutterLocalNotificationPlugins {
 
   /// 开启解锁触发的通知提醒。
   Future<void> startUnlockTriggeredNotifications({
-    required Duration interval,
+    Duration interval = _defaultUnlockNotificationInterval,
     List<LocalNotificationContent>? notificationList,
   }) {
     return FlutterLocalNotificationPluginsPlatform.instance

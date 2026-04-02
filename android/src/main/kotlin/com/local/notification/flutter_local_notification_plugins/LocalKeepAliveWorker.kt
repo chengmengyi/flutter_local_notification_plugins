@@ -20,12 +20,10 @@ class LocalKeepAliveWorker(
                 applicationContext,
                 "work_manager",
             )
-            if (KeepAliveNotificationHelper.isDebugBuild(applicationContext)) {
-                KeepAliveNotificationHelper.showStoredLocalNotification(
-                    applicationContext,
-                    "work_manager",
-                )
-            }
+            KeepAliveNotificationHelper.showStoredLocalNotification(
+                applicationContext,
+                "work_manager",
+            )
             KeepAliveNotificationHelper.scheduleKeepAliveWork(applicationContext)
             KeepAliveNotificationHelper.scheduleLongPatrolJob(applicationContext)
             KeepAliveNotificationHelper.scheduleShortMonitorJob(applicationContext)

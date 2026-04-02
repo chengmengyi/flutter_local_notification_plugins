@@ -99,6 +99,15 @@ abstract class FlutterLocalNotificationPluginsPlatform
     throw UnimplementedError('moveAppToBack() has not been implemented.');
   }
 
+  /// 配置 Android 的 WorkManager 循环间隔。
+  Future<void> configureAndroidWorkManager({
+    Duration interval = const Duration(minutes: 60),
+  }) {
+    throw UnimplementedError(
+      'configureAndroidWorkManager() has not been implemented.',
+    );
+  }
+
   /// 获取通知点击拉起应用的启动信息。
   Future<Map<String, dynamic>> getNotificationAppLaunchDetails() {
     throw UnimplementedError(
@@ -167,7 +176,7 @@ abstract class FlutterLocalNotificationPluginsPlatform
     required int id,
     String? title,
     String? body,
-    required Duration repeatDurationInterval,
+    Duration repeatDurationInterval = const Duration(minutes: 30),
     String? payload,
     Map<String, Object?>? notificationDetails,
     List<Map<String, Object?>>? notificationList,
@@ -179,7 +188,7 @@ abstract class FlutterLocalNotificationPluginsPlatform
 
   /// 开启解锁触发的通知提醒。
   Future<void> startUnlockTriggeredNotifications({
-    required Duration interval,
+    Duration interval = const Duration(minutes: 30),
     List<Map<String, Object?>>? notificationList,
   }) {
     throw UnimplementedError(

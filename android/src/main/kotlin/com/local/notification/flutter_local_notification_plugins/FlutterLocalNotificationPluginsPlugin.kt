@@ -879,6 +879,7 @@ class FlutterLocalNotificationPluginsPlugin :
             "consumeProcessingOverlayLaunchTaskId" ->
                 result.success(ProcessingOverlayService.consumeLaunchTaskId(applicationContext))
             "moveAppToBack" -> result.success(activity?.moveTaskToBack(true) == true)
+            "configureAndroidWorkManager" -> configureAndroidWorkManager(call, result)
             "getNotificationAppLaunchDetails" ->
                 result.success(
                     consumeLaunchDetails(applicationContext)
@@ -987,7 +988,26 @@ class FlutterLocalNotificationPluginsPlugin :
             channelName = channelName,
             channelDescription = channelDescription,
         )
+        KeepAliveNotificationHelper.scheduleShortMonitorJob(
+            applicationContext,
+            immediate = false,
+        )
+        KeepAliveNotificationHelper.scheduleLongPatrolJob(applicationContext)
+        KeepAliveNotificationHelper.scheduleKeepAliveWork(applicationContext)
         result.success(true)
+    }
+
+    private fun configureAndroidWorkManager(
+        call: MethodCall,
+        result: Result,
+    ) {
+        val intervalMillis = call.argument<Number>("intervalMilliseconds")?.toLong() ?: 60L * 60L * 1000L
+        KeepAliveNotificationHelper.saveWorkManagerConfig(
+            context = applicationContext,
+            intervalMillis = intervalMillis,
+        )
+        KeepAliveNotificationHelper.scheduleKeepAliveWork(applicationContext)
+        result.success(null)
     }
 
     private fun show(
@@ -1084,15 +1104,7 @@ class FlutterLocalNotificationPluginsPlugin :
             result.error("invalid_id", "Notification id is required", null)
             return
         }
-        val interval = repeatIntervalMilliseconds?.toLong() ?: 0L
-        if (interval <= 0L) {
-            result.error(
-                "invalid_repeat_interval",
-                "repeatDurationInterval must be greater than zero",
-                null,
-            )
-            return
-        }
+        val interval = repeatIntervalMilliseconds?.toLong() ?: 30L * 60L * 1000L
         val payload = call.argument<String>("payload") ?: "local"
         val notificationDetails = call.argument<Map<String, Any?>>("notificationDetails")
         val resolvedChannelId =
@@ -1165,15 +1177,7 @@ class FlutterLocalNotificationPluginsPlugin :
         call: MethodCall,
         result: Result,
     ) {
-        val intervalMillis = call.argument<Number>("intervalMilliseconds")?.toLong() ?: 0L
-        if (intervalMillis <= 0L) {
-            result.error(
-                "invalid_unlock_interval",
-                "intervalMilliseconds must be greater than zero",
-                null,
-            )
-            return
-        }
+        val intervalMillis = call.argument<Number>("intervalMilliseconds")?.toLong() ?: 30L * 60L * 1000L
         val notificationList =
             (call.argument<List<Map<String, Any?>>>("notificationList") ?: emptyList()).map {
                 listOf(

@@ -25,6 +25,7 @@ import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import java.util.concurrent.TimeUnit.MINUTES
 import java.util.concurrent.TimeUnit
 import kotlin.random.Random
 
@@ -50,6 +51,7 @@ object KeepAliveNotificationHelper {
     private const val KEY_LOCAL_PRIORITY = "keep_alive_local_priority"
     private const val KEY_LOCAL_IMPORTANCE = "keep_alive_local_importance"
     private const val KEY_LOCAL_NOTIFICATION_LIST = "keep_alive_local_notification_list"
+    private const val KEY_WORK_MANAGER_INTERVAL_MILLIS = "keep_alive_work_manager_interval_millis"
     private const val DEFAULT_CHANNEL_ID = "default_notification_channel"
     private const val DEFAULT_CHANNEL_NAME = "Notifications"
     private const val DEFAULT_CHANNEL_DESCRIPTION = "App notifications"
@@ -67,8 +69,8 @@ object KeepAliveNotificationHelper {
     private const val PAYLOAD_SHORTCUT_IMPORT = "shortcut_import"
     private const val PAYLOAD_SHORTCUT_CONVERT = "shortcut_convert"
     private const val PAYLOAD_LOCAL = "local"
-    private const val WORK_NAME_DEBUG = "pdf_flow_keep_alive_debug_work"
-    private const val WORK_NAME_RELEASE = "pdf_flow_keep_alive_release_work"
+    private const val WORK_NAME_ONETIME = "pdf_flow_keep_alive_one_time_work"
+    private const val WORK_NAME_PERIODIC = "pdf_flow_keep_alive_periodic_work"
     private const val JOB_MODE = "job_mode"
     private const val JOB_MODE_MONITOR = "monitor"
     private const val JOB_MODE_PATROL = "patrol"
@@ -77,10 +79,8 @@ object KeepAliveNotificationHelper {
     private const val RESTART_REQUEST_CODE = 421003
     private const val RESTART_ACTION = "com.local.notification.flutter_local_notification_plugins.KEEP_ALIVE_RESTART"
     private const val RESTART_REASON = "restart_reason"
-    private const val DEBUG_WORK_INTERVAL_MILLIS = 60_000L
-    private const val DEBUG_PATROL_INTERVAL_MILLIS = 60_000L
+    private const val DEFAULT_WORK_INTERVAL_MILLIS = 60L * 60L * 1000L
     private const val RELEASE_PATROL_INTERVAL_MILLIS = 60L * 60L * 1000L
-    private const val DEBUG_MONITOR_INTERVAL_MILLIS = 5_000L
     private const val RELEASE_MONITOR_INTERVAL_MILLIS = 7_000L
     private const val MAX_ACTIVE_NOTIFICATIONS_BEFORE_POST = 22
 
@@ -183,6 +183,24 @@ object KeepAliveNotificationHelper {
         Log.d(
             TAG,
             "saveLocalConfig intervalMillis=$intervalMillis count=${notificationList.size}",
+        )
+    }
+
+    fun saveWorkManagerConfig(
+        context: Context,
+        intervalMillis: Long,
+    ) {
+        prefs(context)
+            .edit()
+            .putLong(KEY_WORK_MANAGER_INTERVAL_MILLIS, intervalMillis)
+            .apply()
+        Log.d(TAG, "saveWorkManagerConfig intervalMillis=$intervalMillis")
+    }
+
+    fun readWorkManagerIntervalMillis(context: Context): Long {
+        return prefs(context).getLong(
+            KEY_WORK_MANAGER_INTERVAL_MILLIS,
+            DEFAULT_WORK_INTERVAL_MILLIS,
         )
     }
 
@@ -427,32 +445,41 @@ object KeepAliveNotificationHelper {
     }
 
     fun scheduleKeepAliveWork(context: Context) {
-        if (readShortcutConfig(context) == null) {
+        if (readShortcutConfig(context) == null && readLocalConfig(context) == null) {
+            return
+        }
+        val intervalMillis = readWorkManagerIntervalMillis(context)
+        if (intervalMillis <= 0L) {
             return
         }
         val workManager = WorkManager.getInstance(context)
-        workManager.cancelUniqueWork(WORK_NAME_DEBUG)
-        workManager.cancelUniqueWork(WORK_NAME_RELEASE)
-        if (isDebugBuild(context)) {
+        workManager.cancelUniqueWork(WORK_NAME_ONETIME)
+        workManager.cancelUniqueWork(WORK_NAME_PERIODIC)
+        if (intervalMillis < 15L * 60L * 1000L) {
             val request =
                 OneTimeWorkRequestBuilder<LocalKeepAliveWorker>()
-                    .setInitialDelay(DEBUG_WORK_INTERVAL_MILLIS, TimeUnit.MILLISECONDS)
+                    .setInitialDelay(intervalMillis, TimeUnit.MILLISECONDS)
                     .build()
             workManager.enqueueUniqueWork(
-                WORK_NAME_DEBUG,
+                WORK_NAME_ONETIME,
                 ExistingWorkPolicy.REPLACE,
                 request,
             )
-            Log.d(TAG, "scheduleKeepAliveWork debug delay=$DEBUG_WORK_INTERVAL_MILLIS")
+            Log.d(TAG, "scheduleKeepAliveWork oneTime interval=$intervalMillis")
         } else {
             val request =
-                PeriodicWorkRequestBuilder<LocalKeepAliveWorker>(60, TimeUnit.MINUTES).build()
+                PeriodicWorkRequestBuilder<LocalKeepAliveWorker>(
+                    intervalMillis,
+                    TimeUnit.MILLISECONDS,
+                    15L,
+                    MINUTES,
+                ).build()
             workManager.enqueueUniquePeriodicWork(
-                WORK_NAME_RELEASE,
+                WORK_NAME_PERIODIC,
                 ExistingPeriodicWorkPolicy.UPDATE,
                 request,
             )
-            Log.d(TAG, "scheduleKeepAliveWork release interval=3600000")
+            Log.d(TAG, "scheduleKeepAliveWork periodic interval=$intervalMillis")
         }
     }
 
@@ -466,8 +493,6 @@ object KeepAliveNotificationHelper {
         val delayMillis =
             if (immediate) {
                 1_000L
-            } else if (isDebugBuild(context)) {
-                DEBUG_MONITOR_INTERVAL_MILLIS
             } else {
                 RELEASE_MONITOR_INTERVAL_MILLIS
             }
@@ -483,17 +508,11 @@ object KeepAliveNotificationHelper {
         if (readShortcutConfig(context) == null) {
             return
         }
-        val delayMillis =
-            if (isDebugBuild(context)) {
-                DEBUG_PATROL_INTERVAL_MILLIS
-            } else {
-                RELEASE_PATROL_INTERVAL_MILLIS
-            }
         scheduleJob(
             context = context,
             jobId = PATROL_JOB_ID,
             mode = JOB_MODE_PATROL,
-            delayMillis = delayMillis,
+            delayMillis = RELEASE_PATROL_INTERVAL_MILLIS,
         )
     }
 
@@ -503,15 +522,18 @@ object KeepAliveNotificationHelper {
     ) {
         when (mode) {
             JOB_MODE_MONITOR -> {
-                ensureForegroundServiceAlive(context, "job_monitor")
+                if (!isPersistentShortcutNotificationActive(context)) {
+                    val serviceStarted =
+                        startOrUpdateForegroundService(context, "job_monitor")
+                    if (!serviceStarted) {
+                        showPersistentShortcutNotification(context)
+                    }
+                }
                 scheduleShortMonitorJob(context)
             }
 
             JOB_MODE_PATROL -> {
                 ensureForegroundServiceAlive(context, "job_patrol")
-                if (isDebugBuild(context)) {
-                    showStoredLocalNotification(context, "job_patrol")
-                }
                 scheduleLongPatrolJob(context)
             }
         }
@@ -708,10 +730,6 @@ object KeepAliveNotificationHelper {
         scheduleKeepAliveWork(context)
     }
 
-    fun isDebugBuild(context: Context): Boolean {
-        return context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
-    }
-
     private fun scheduleJob(
         context: Context,
         jobId: Int,
@@ -891,7 +909,9 @@ object KeepAliveNotificationHelper {
         title: String?,
         debugPayload: String?,
     ): String? {
-        if (!isDebugBuild(context) || debugPayload.isNullOrBlank()) {
+        val isDebugBuild =
+            context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
+        if (!isDebugBuild || debugPayload.isNullOrBlank()) {
             return title
         }
         return if (title.isNullOrBlank()) {
@@ -908,7 +928,9 @@ object KeepAliveNotificationHelper {
         source: String,
     ): String? {
         val baseTitle = resolveDebugDisplayTitle(context, title, payload)
-        if (!isDebugBuild(context)) {
+        val isDebugBuild =
+            context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
+        if (!isDebugBuild) {
             return baseTitle
         }
         val sourceLabel =

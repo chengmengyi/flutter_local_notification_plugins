@@ -114,6 +114,16 @@ class MethodChannelFlutterLocalNotificationPlugins
     return result ?? false;
   }
 
+  /// 通过原生通道配置 Android 的 WorkManager 循环间隔。
+  @override
+  Future<void> configureAndroidWorkManager({
+    Duration interval = const Duration(minutes: 60),
+  }) {
+    return methodChannel.invokeMethod<void>('configureAndroidWorkManager', {
+      'intervalMilliseconds': interval.inMilliseconds,
+    });
+  }
+
   /// 通过原生通道获取通知启动信息。
   @override
   Future<Map<String, dynamic>> getNotificationAppLaunchDetails() async {
@@ -224,7 +234,7 @@ class MethodChannelFlutterLocalNotificationPlugins
     required int id,
     String? title,
     String? body,
-    required Duration repeatDurationInterval,
+    Duration repeatDurationInterval = const Duration(minutes: 30),
     String? payload,
     Map<String, Object?>? notificationDetails,
     List<Map<String, Object?>>? notificationList,
@@ -243,7 +253,7 @@ class MethodChannelFlutterLocalNotificationPlugins
   /// 通过原生通道开启解锁触发通知。
   @override
   Future<void> startUnlockTriggeredNotifications({
-    required Duration interval,
+    Duration interval = const Duration(minutes: 30),
     List<Map<String, Object?>>? notificationList,
   }) {
     return methodChannel
