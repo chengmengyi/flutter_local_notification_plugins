@@ -64,6 +64,13 @@ class UnlockNotificationReceiver : BroadcastReceiver() {
         context: Context,
         intent: Intent,
     ) {
+        if (FlutterLocalNotificationPluginsPlugin.isNotificationBlocked(context)) {
+            Log.d(
+                "LocalNotificationPlugin",
+                "UnlockNotificationReceiver blocked action=${intent.action}",
+            )
+            return
+        }
         if (broadcastAction != null && broadcastAction != intent.action) {
             return
         }

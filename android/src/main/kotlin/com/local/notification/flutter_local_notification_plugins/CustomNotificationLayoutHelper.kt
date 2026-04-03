@@ -70,8 +70,7 @@ object CustomNotificationLayoutHelper {
     fun supportsPayload(payload: String?): Boolean {
         return payload == "local" ||
             payload == "lock" ||
-            payload == "fcm" ||
-            payload == "media"
+            payload == "fcm"
     }
 
     fun applyCustomLayoutIfNeeded(
@@ -111,9 +110,6 @@ object CustomNotificationLayoutHelper {
         builder.setCustomContentView(smallRemoteViews)
         builder.setCustomBigContentView(bigRemoteViews)
         builder.setCustomHeadsUpContentView(smallRemoteViews)
-        if (payload == "media") {
-            builder.setStyle(androidx.media.app.NotificationCompat.DecoratedMediaCustomViewStyle())
-        }
         return true
     }
 

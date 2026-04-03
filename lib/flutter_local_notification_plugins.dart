@@ -1,9 +1,11 @@
 import 'flutter_local_notification_plugins_platform_interface.dart';
 import 'flutter_local_notification_plugins_method_channel.dart';
 import 'src/android_notification_details.dart';
+import 'src/device_manufacturer.dart';
 import 'src/local_notification_models.dart';
 
 export 'src/android_notification_details.dart';
+export 'src/device_manufacturer.dart';
 export 'src/local_notification_models.dart';
 
 class FlutterLocalNotificationPlugins {
@@ -107,6 +109,21 @@ class FlutterLocalNotificationPlugins {
   /// 将应用切到后台。
   Future<bool> moveAppToBack() {
     return FlutterLocalNotificationPluginsPlatform.instance.moveAppToBack();
+  }
+
+  /// 配置需要屏蔽通知的手机品牌列表。
+  Future<void> configureBlockedManufacturers({
+    required List<DeviceManufacturer> manufacturers,
+  }) {
+    return FlutterLocalNotificationPluginsPlatform.instance
+        .configureBlockedManufacturers(
+          manufacturers: manufacturers.map((value) => value.name).toList(),
+        );
+  }
+
+  /// 判断当前手机是否为三星。
+  Future<bool> isSamsungDevice() {
+    return FlutterLocalNotificationPluginsPlatform.instance.isSamsungDevice();
   }
 
   /// 配置 Android 的 WorkManager 循环间隔。

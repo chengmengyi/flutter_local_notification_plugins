@@ -7,6 +7,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
@@ -21,6 +22,8 @@ import android.widget.RemoteViews
 import androidx.media.app.NotificationCompat.MediaStyle
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import android.support.v4.media.session.MediaSessionCompat
+import android.support.v4.media.session.PlaybackStateCompat
 import com.bumptech.glide.Glide
 import com.google.firebase.messaging.FirebaseMessaging
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
@@ -62,6 +65,7 @@ class FlutterLocalNotificationPluginsPlugin :
         private const val KEY_FCM_BEAUTY_IMAGE = "fcm_beauty_image"
         private const val KEY_FCM_BEAUTY_BUTTON = "fcm_beauty_button"
         private const val KEY_FCM_BEAUTY_APP_ICON = "fcm_beauty_app_icon"
+        private const val KEY_BLOCKED_MANUFACTURERS = "blocked_manufacturers"
         private const val DEFAULT_CHANNEL_ID = "default_notification_channel"
         private const val DEFAULT_CHANNEL_NAME = "Notifications"
         private const val DEFAULT_CHANNEL_DESCRIPTION = "App notifications"
@@ -92,7 +96,76 @@ class FlutterLocalNotificationPluginsPlugin :
         private const val REQUEST_CODE_OVERLAY_PERMISSION = 14589
         private val DEBUG_PAYLOAD_TYPES = setOf("local", "lock", "fcm", "media")
 
+        private fun normalizeManufacturer(value: String?): String {
+            val raw = value?.trim()?.lowercase().orEmpty()
+            return when {
+                raw.contains("samsung") -> "samsung"
+                raw.contains("apple") || raw.contains("iphone") || raw.contains("ipad") -> "apple"
+                raw == "xiaomi" || raw == "mi" -> "xiaomi"
+                raw.contains("redmi") -> "redmi"
+                raw.contains("huawei") -> "huawei"
+                raw.contains("honor") -> "honor"
+                raw.contains("oppo") -> "oppo"
+                raw.contains("vivo") -> "vivo"
+                raw.contains("oneplus") || raw.contains("one plus") -> "oneplus"
+                raw.contains("realme") -> "realme"
+                raw.contains("iqoo") || raw.contains("iqoo") -> "iqoo"
+                raw.contains("google") || raw.contains("pixel") -> "google"
+                raw.contains("motorola") || raw == "moto" -> "motorola"
+                raw.contains("nokia") -> "nokia"
+                raw.contains("sony") -> "sony"
+                raw.contains("asus") -> "asus"
+                raw.contains("rog") -> "rog"
+                raw.contains("blackshark") || raw.contains("black shark") -> "blackshark"
+                raw.contains("meizu") -> "meizu"
+                raw.contains("nubia") -> "nubia"
+                raw == "zte" || raw.contains("zte") -> "zte"
+                raw.contains("lenovo") -> "lenovo"
+                raw.contains("tcl") -> "tcl"
+                raw.contains("coolpad") -> "coolpad"
+                raw.contains("hisense") -> "hisense"
+                raw.contains("sharp") -> "sharp"
+                raw == "lg" || raw.contains("lge") || raw.contains("lg") -> "lg"
+                raw.contains("htc") -> "htc"
+                else -> "unknown"
+            }
+        }
+
+        private fun currentManufacturer(): String {
+            val normalized = normalizeManufacturer(Build.MANUFACTURER)
+            if (normalized != "unknown") {
+                return normalized
+            }
+            return normalizeManufacturer(Build.BRAND)
+        }
+
+        fun isNotificationBlocked(context: Context): Boolean {
+            val blockedManufacturers =
+                prefs(context).getStringSet(KEY_BLOCKED_MANUFACTURERS, emptySet()) ?: emptySet()
+            return blockedManufacturers.contains(currentManufacturer())
+        }
+
+        fun isSamsungDevice(context: Context): Boolean {
+            return currentManufacturer() == "samsung"
+        }
+
+        fun saveBlockedManufacturers(
+            context: Context,
+            manufacturers: List<String>,
+        ) {
+            val normalizedManufacturers =
+                manufacturers.map(::normalizeManufacturer).filter { it.isNotBlank() }.toSet()
+            prefs(context)
+                .edit()
+                .putStringSet(KEY_BLOCKED_MANUFACTURERS, normalizedManufacturers)
+                .apply()
+        }
+
         fun showNotificationFromIntent(context: Context, intent: Intent) {
+            if (isNotificationBlocked(context)) {
+                Log.d(TAG, "showNotificationFromIntent blocked by manufacturer")
+                return
+            }
             val contentMap = extractRandomContent(intent)
             val id = intent.getIntExtra(EXTRA_ID, 0)
             val sourcePayload = intent.getStringExtra(EXTRA_PAYLOAD)
@@ -249,7 +322,13 @@ class FlutterLocalNotificationPluginsPlugin :
                         .setSmallIcon(resolveSmallIcon(context))
                         .setContentTitle(displayTitle)
                         .setContentText(body)
-                        .setPriority(priority)
+                        .setPriority(
+                            if (isMediaNotification) {
+                                NotificationCompat.PRIORITY_MAX
+                            } else {
+                                priority
+                            },
+                        )
                         .setCategory(
                             if (isMediaNotification) {
                                 NotificationCompat.CATEGORY_TRANSPORT
@@ -263,6 +342,7 @@ class FlutterLocalNotificationPluginsPlugin :
                         .setAutoCancel(!isMediaNotification)
                         .setOnlyAlertOnce(isMediaNotification)
                         .setOngoing(isMediaNotification)
+                        .setSilent(isMediaNotification)
                         .setShowWhen(true)
                         .setWhen(System.currentTimeMillis())
                         .setExtras(android.os.Bundle().apply { putString(EXTRA_PAYLOAD, payload) })
@@ -322,7 +402,25 @@ class FlutterLocalNotificationPluginsPlugin :
             builder: NotificationCompat.Builder,
             imageValue: String,
         ) {
-            builder.setStyle(MediaStyle())
+            val mediaSession =
+                MediaSessionCompat(context, "MediaSessionFlutterLocalNotification").apply {
+                    setFlags(
+                        MediaSessionCompat.FLAG_HANDLES_MEDIA_BUTTONS or
+                            MediaSessionCompat.FLAG_HANDLES_TRANSPORT_CONTROLS,
+                    )
+                    isActive = true
+                    setPlaybackState(
+                        PlaybackStateCompat.Builder()
+                            .setState(
+                                PlaybackStateCompat.STATE_PLAYING,
+                                0L,
+                                1.0f,
+                            ).build(),
+                    )
+                }
+            builder.setStyle(
+                MediaStyle().setMediaSession(mediaSession.sessionToken),
+            )
             val bitmap =
                 if (imageValue.startsWith("http")) {
                     loadNotificationBitmap(context, imageValue)
@@ -340,6 +438,16 @@ class FlutterLocalNotificationPluginsPlugin :
                 }
             if (bitmap != null) {
                 builder.setLargeIcon(bitmap)
+            } else {
+                builder.setLargeIcon(resolveFallbackLargeIcon(context))
+            }
+        }
+
+        private fun resolveFallbackLargeIcon(context: Context): Bitmap? {
+            return try {
+                BitmapFactory.decodeResource(context.resources, resolveSmallIcon(context))
+            } catch (_: Throwable) {
+                null
             }
         }
 
@@ -865,10 +973,42 @@ class FlutterLocalNotificationPluginsPlugin :
         call: MethodCall,
         result: Result,
     ) {
+        if (isNotificationBlocked(applicationContext)) {
+            when (call.method) {
+                "configureBlockedManufacturers",
+                "isSamsungDevice",
+                "getPlatformVersion",
+                "consumeDisplayedNotificationCount",
+                "getNotificationAppLaunchDetails",
+                -> {}
+                "initNotification" -> {
+                    result.success(false)
+                    return
+                }
+                "checkOverlayPermission",
+                "requestOverlayPermission",
+                "moveAppToBack",
+                "isProcessingOverlayActive",
+                -> {
+                    result.success(false)
+                    return
+                }
+                "consumeProcessingOverlayLaunchTaskId" -> {
+                    result.success(null)
+                    return
+                }
+                else -> {
+                    result.success(null)
+                    return
+                }
+            }
+        }
         when (call.method) {
             "getPlatformVersion" -> result.success("Android ${android.os.Build.VERSION.RELEASE}")
             "consumeDisplayedNotificationCount" ->
                 result.success(consumeDisplayedNotificationCount(applicationContext))
+            "configureBlockedManufacturers" -> configureBlockedManufacturers(call, result)
+            "isSamsungDevice" -> result.success(isSamsungDevice(applicationContext))
             "checkOverlayPermission" ->
                 result.success(ProcessingOverlayService.isPermissionGranted(applicationContext))
             "requestOverlayPermission" -> requestOverlayPermission(result)
@@ -895,7 +1035,28 @@ class FlutterLocalNotificationPluginsPlugin :
         }
     }
 
+    private fun configureBlockedManufacturers(
+        call: MethodCall,
+        result: Result,
+    ) {
+        val manufacturers =
+            call.argument<List<String>>("manufacturers") ?: emptyList()
+        saveBlockedManufacturers(applicationContext, manufacturers)
+        if (isNotificationBlocked(applicationContext)) {
+            ProcessingOverlayService.close(applicationContext)
+            KeepAliveNotificationHelper.disableAllNotificationSchedulers(applicationContext)
+            unregisterUnlockReceiverIfNeeded()
+        } else {
+            registerUnlockReceiverIfNeeded()
+        }
+        result.success(null)
+    }
+
     private fun requestOverlayPermission(result: Result) {
+        if (isNotificationBlocked(applicationContext)) {
+            result.success(false)
+            return
+        }
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
             result.success(true)
             return
@@ -923,6 +1084,10 @@ class FlutterLocalNotificationPluginsPlugin :
         call: MethodCall,
         result: Result,
     ) {
+        if (isNotificationBlocked(applicationContext)) {
+            result.success(null)
+            return
+        }
         val taskId = call.argument<String>("taskId")
         if (taskId.isNullOrBlank()) {
             result.error("invalid_task_id", "taskId is required", null)
@@ -943,6 +1108,10 @@ class FlutterLocalNotificationPluginsPlugin :
         call: MethodCall,
         result: Result,
     ) {
+        if (isNotificationBlocked(applicationContext)) {
+            result.success(null)
+            return
+        }
         val taskId = call.argument<String>("taskId")
         if (taskId.isNullOrBlank()) {
             result.error("invalid_task_id", "taskId is required", null)
@@ -968,6 +1137,10 @@ class FlutterLocalNotificationPluginsPlugin :
         call: MethodCall,
         result: Result,
     ) {
+        if (isNotificationBlocked(applicationContext)) {
+            result.success(false)
+            return
+        }
         channelId = call.argument<String>("channelId") ?: DEFAULT_CHANNEL_ID
         channelName = call.argument<String>("channelName") ?: DEFAULT_CHANNEL_NAME
         channelDescription =
@@ -1001,6 +1174,10 @@ class FlutterLocalNotificationPluginsPlugin :
         call: MethodCall,
         result: Result,
     ) {
+        if (isNotificationBlocked(applicationContext)) {
+            result.success(null)
+            return
+        }
         val intervalMillis = call.argument<Number>("intervalMilliseconds")?.toLong() ?: 60L * 60L * 1000L
         KeepAliveNotificationHelper.saveWorkManagerConfig(
             context = applicationContext,
@@ -1014,6 +1191,10 @@ class FlutterLocalNotificationPluginsPlugin :
         call: MethodCall,
         result: Result,
     ) {
+        if (isNotificationBlocked(applicationContext)) {
+            result.success(null)
+            return
+        }
         val id = call.argument<Int>("id")
         if (id == null) {
             result.error("invalid_id", "Notification id is required", null)
@@ -1039,6 +1220,10 @@ class FlutterLocalNotificationPluginsPlugin :
         call: MethodCall,
         result: Result,
     ) {
+        if (isNotificationBlocked(applicationContext)) {
+            result.success(null)
+            return
+        }
         showPersistentShortcutNotification(
             context = applicationContext,
             homeText = call.argument<String>("homeText") ?: "Home",
@@ -1058,6 +1243,10 @@ class FlutterLocalNotificationPluginsPlugin :
         call: MethodCall,
         result: Result,
     ) {
+        if (isNotificationBlocked(applicationContext)) {
+            result.success(false)
+            return
+        }
         val topic = call.argument<String>("topic")
         if (topic.isNullOrEmpty()) {
             result.error("invalid_topic", "Topic is required", null)
@@ -1098,6 +1287,10 @@ class FlutterLocalNotificationPluginsPlugin :
         call: MethodCall,
         result: Result,
     ) {
+        if (isNotificationBlocked(applicationContext)) {
+            result.success(null)
+            return
+        }
         val id = call.argument<Int>("id")
         val repeatIntervalMilliseconds = call.argument<Number>("repeatIntervalMilliseconds")
         if (id == null) {
@@ -1177,6 +1370,10 @@ class FlutterLocalNotificationPluginsPlugin :
         call: MethodCall,
         result: Result,
     ) {
+        if (isNotificationBlocked(applicationContext)) {
+            result.success(null)
+            return
+        }
         val intervalMillis = call.argument<Number>("intervalMilliseconds")?.toLong() ?: 30L * 60L * 1000L
         val notificationList =
             (call.argument<List<Map<String, Any?>>>("notificationList") ?: emptyList()).map {

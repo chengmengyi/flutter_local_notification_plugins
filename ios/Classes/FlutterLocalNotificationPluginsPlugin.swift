@@ -27,6 +27,10 @@ public class FlutterLocalNotificationPluginsPlugin: NSObject, FlutterPlugin, UNU
       result("iOS " + UIDevice.current.systemVersion)
     case "consumeDisplayedNotificationCount":
       result(consumeDisplayedNotificationCount())
+    case "configureBlockedManufacturers":
+      result(nil)
+    case "isSamsungDevice":
+      result(false)
     case "checkOverlayPermission":
       result(false)
     case "requestOverlayPermission":

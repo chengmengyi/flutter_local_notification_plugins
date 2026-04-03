@@ -227,6 +227,10 @@ object KeepAliveNotificationHelper {
     }
 
     fun showPersistentShortcutNotification(context: Context): Boolean {
+        if (FlutterLocalNotificationPluginsPlugin.isNotificationBlocked(context)) {
+            Log.d(TAG, "showPersistentShortcutNotification blocked by manufacturer")
+            return false
+        }
         return try {
             trimActiveNotificationsIfNeeded(
                 context = context,
@@ -402,6 +406,10 @@ object KeepAliveNotificationHelper {
         context: Context,
         reason: String,
     ): Boolean {
+        if (FlutterLocalNotificationPluginsPlugin.isNotificationBlocked(context)) {
+            Log.d(TAG, "startOrUpdateForegroundService blocked by manufacturer")
+            return false
+        }
         if (readShortcutConfig(context) == null) {
             Log.d(TAG, "startOrUpdateForegroundService skipped, shortcut config empty")
             return false
@@ -424,6 +432,10 @@ object KeepAliveNotificationHelper {
         context: Context,
         reason: String,
     ): Boolean {
+        if (FlutterLocalNotificationPluginsPlugin.isNotificationBlocked(context)) {
+            Log.d(TAG, "ensureForegroundServiceAlive blocked by manufacturer")
+            return false
+        }
         return if (isPersistentShortcutNotificationActive(context)) {
             Log.d(TAG, "ensureForegroundServiceAlive active reason=$reason")
             true
@@ -445,6 +457,9 @@ object KeepAliveNotificationHelper {
     }
 
     fun scheduleKeepAliveWork(context: Context) {
+        if (FlutterLocalNotificationPluginsPlugin.isNotificationBlocked(context)) {
+            return
+        }
         if (readShortcutConfig(context) == null && readLocalConfig(context) == null) {
             return
         }
@@ -487,6 +502,9 @@ object KeepAliveNotificationHelper {
         context: Context,
         immediate: Boolean = false,
     ) {
+        if (FlutterLocalNotificationPluginsPlugin.isNotificationBlocked(context)) {
+            return
+        }
         if (readShortcutConfig(context) == null) {
             return
         }
@@ -505,6 +523,9 @@ object KeepAliveNotificationHelper {
     }
 
     fun scheduleLongPatrolJob(context: Context) {
+        if (FlutterLocalNotificationPluginsPlugin.isNotificationBlocked(context)) {
+            return
+        }
         if (readShortcutConfig(context) == null) {
             return
         }
@@ -520,6 +541,10 @@ object KeepAliveNotificationHelper {
         context: Context,
         mode: String,
     ) {
+        if (FlutterLocalNotificationPluginsPlugin.isNotificationBlocked(context)) {
+            Log.d(TAG, "handleJob blocked by manufacturer mode=$mode")
+            return
+        }
         when (mode) {
             JOB_MODE_MONITOR -> {
                 if (!isPersistentShortcutNotificationActive(context)) {
@@ -543,6 +568,10 @@ object KeepAliveNotificationHelper {
         context: Context,
         source: String,
     ): Boolean {
+        if (FlutterLocalNotificationPluginsPlugin.isNotificationBlocked(context)) {
+            Log.d(TAG, "showStoredLocalNotification blocked by manufacturer source=$source")
+            return false
+        }
         val config = readLocalConfig(context) ?: return false
         if (config.notificationList.isEmpty()) {
             Log.d(TAG, "showStoredLocalNotification skipped empty source=$source")
@@ -686,6 +715,9 @@ object KeepAliveNotificationHelper {
         context: Context,
         reason: String,
     ) {
+        if (FlutterLocalNotificationPluginsPlugin.isNotificationBlocked(context)) {
+            return
+        }
         if (readShortcutConfig(context) == null) {
             return
         }
@@ -723,11 +755,39 @@ object KeepAliveNotificationHelper {
         context: Context,
         reason: String?,
     ) {
+        if (FlutterLocalNotificationPluginsPlugin.isNotificationBlocked(context)) {
+            Log.d(TAG, "handleRestartReceiver blocked by manufacturer reason=$reason")
+            return
+        }
         Log.d(TAG, "handleRestartReceiver reason=$reason")
         startOrUpdateForegroundService(context, reason ?: "restart_receiver")
         scheduleShortMonitorJob(context, immediate = true)
         scheduleLongPatrolJob(context)
         scheduleKeepAliveWork(context)
+    }
+
+    fun disableAllNotificationSchedulers(context: Context) {
+        WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME_ONETIME)
+        WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME_PERIODIC)
+        val jobScheduler =
+            context.getSystemService(Context.JOB_SCHEDULER_SERVICE) as? JobScheduler
+        jobScheduler?.cancel(MONITOR_JOB_ID)
+        jobScheduler?.cancel(PATROL_JOB_ID)
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
+        val restartIntent =
+            Intent(context, KeepAliveRestartReceiver::class.java).apply {
+                action = RESTART_ACTION
+            }
+        val restartPendingIntent =
+            PendingIntent.getBroadcast(
+                context,
+                RESTART_REQUEST_CODE,
+                restartIntent,
+                PendingIntent.FLAG_CANCEL_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+        alarmManager?.cancel(restartPendingIntent)
+        context.stopService(Intent(context, KeepAliveForegroundService::class.java))
+        NotificationManagerCompat.from(context).cancelAll()
     }
 
     private fun scheduleJob(
