@@ -181,6 +181,7 @@ abstract class FlutterLocalNotificationPluginsPlatform
     String? body,
     String? payload,
     String? clickPayload,
+    String? mediaBackgroundImageName,
   }) {
     throw UnimplementedError('show() has not been implemented.');
   }
@@ -192,6 +193,7 @@ abstract class FlutterLocalNotificationPluginsPlatform
     String? body,
     Duration repeatDurationInterval = const Duration(minutes: 30),
     String? payload,
+    String? mediaBackgroundImageName,
     Map<String, Object?>? notificationDetails,
     List<Map<String, Object?>>? notificationList,
   }) {

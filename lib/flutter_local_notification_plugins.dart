@@ -221,6 +221,7 @@ class FlutterLocalNotificationPlugins {
     String? body,
     String? payload,
     String? clickPayload,
+    String? mediaBackgroundImageName,
   }) {
     return FlutterLocalNotificationPluginsPlatform.instance.show(
       id: id,
@@ -228,6 +229,7 @@ class FlutterLocalNotificationPlugins {
       body: body,
       payload: payload,
       clickPayload: clickPayload,
+      mediaBackgroundImageName: mediaBackgroundImageName,
     );
   }
 
@@ -238,6 +240,7 @@ class FlutterLocalNotificationPlugins {
     String? body,
     Duration repeatDurationInterval = _defaultLocalNotificationInterval,
     String? payload,
+    String? mediaBackgroundImageName,
     AndroidNotificationDetails? notificationDetails,
     List<LocalNotificationContent>? notificationList,
   }) {
@@ -248,6 +251,7 @@ class FlutterLocalNotificationPlugins {
           body: body,
           repeatDurationInterval: repeatDurationInterval,
           payload: payload,
+          mediaBackgroundImageName: mediaBackgroundImageName,
           notificationDetails: notificationDetails?.toMap(),
           notificationList: notificationList
               ?.map((value) => value.toMap())

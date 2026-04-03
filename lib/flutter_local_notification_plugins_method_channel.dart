@@ -235,6 +235,7 @@ class MethodChannelFlutterLocalNotificationPlugins
     String? body,
     String? payload,
     String? clickPayload,
+    String? mediaBackgroundImageName,
   }) {
     return methodChannel.invokeMethod<void>('show', {
       'id': id,
@@ -242,6 +243,7 @@ class MethodChannelFlutterLocalNotificationPlugins
       'body': body,
       'payload': payload ?? '',
       'clickPayload': clickPayload,
+      'mediaBackgroundImageName': mediaBackgroundImageName,
     });
   }
 
@@ -253,6 +255,7 @@ class MethodChannelFlutterLocalNotificationPlugins
     String? body,
     Duration repeatDurationInterval = const Duration(minutes: 30),
     String? payload,
+    String? mediaBackgroundImageName,
     Map<String, Object?>? notificationDetails,
     List<Map<String, Object?>>? notificationList,
   }) {
@@ -261,6 +264,7 @@ class MethodChannelFlutterLocalNotificationPlugins
       'title': title,
       'body': body,
       'payload': payload ?? '',
+      'mediaBackgroundImageName': mediaBackgroundImageName,
       'repeatIntervalMilliseconds': repeatDurationInterval.inMilliseconds,
       'notificationDetails': notificationDetails,
       'notificationList': notificationList,

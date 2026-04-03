@@ -84,6 +84,7 @@ class FlutterLocalNotificationPluginsPlugin :
         private const val EXTRA_IMPORTANCE = "importance"
         private const val EXTRA_STYLE = "style"
         private const val EXTRA_STYLE_IMAGE = "styleImage"
+        private const val EXTRA_MEDIA_BACKGROUND_IMAGE_NAME = "mediaBackgroundImageName"
         private const val EXTRA_REPLACE_EXISTING = "replaceExisting"
         private const val MEDIA_ACTION_PREVIOUS = "media_previous"
         private const val MEDIA_ACTION_TOGGLE = "media_toggle"
@@ -189,7 +190,9 @@ class FlutterLocalNotificationPluginsPlugin :
             val importance =
                 intent.getIntExtra(EXTRA_IMPORTANCE, NotificationManager.IMPORTANCE_HIGH)
             val style = intent.getStringExtra(EXTRA_STYLE)
-            val styleImage = intent.getStringExtra(EXTRA_STYLE_IMAGE)
+            val styleImage =
+                intent.getStringExtra(EXTRA_STYLE_IMAGE)
+                    ?: intent.getStringExtra(EXTRA_MEDIA_BACKGROUND_IMAGE_NAME)
             val replaceExisting = intent.getBooleanExtra(EXTRA_REPLACE_EXISTING, false)
             val displayId = (System.currentTimeMillis() % Int.MAX_VALUE).toInt()
             showNotification(
@@ -490,7 +493,9 @@ class FlutterLocalNotificationPluginsPlugin :
                 if (!mediaImage.isNullOrBlank() && mediaImage.startsWith("http")) {
                     loadNotificationBitmap(context, mediaImage)
                 } else {
-                    val imageResId = resolveNamedResourceId(context, mediaImage ?: "")
+                    val resolvedImageName =
+                        mediaImage?.takeUnless { it.isBlank() } ?: "logo"
+                    val imageResId = resolveNamedResourceId(context, resolvedImageName)
                     if (imageResId != null) {
                         Glide.with(context)
                             .asBitmap()
@@ -500,18 +505,23 @@ class FlutterLocalNotificationPluginsPlugin :
                     } else {
                         null
                     }
-                }
+            }
             if (bitmap != null) {
                 builder.setLargeIcon(bitmap)
             } else {
-                builder.setLargeIcon(resolveFallbackLargeIcon(context))
+                builder.setLargeIcon(resolveDefaultMediaLargeIcon(context))
             }
             return builder
         }
 
-        private fun resolveFallbackLargeIcon(context: Context): Bitmap? {
+        private fun resolveDefaultMediaLargeIcon(context: Context): Bitmap? {
             return try {
-                BitmapFactory.decodeResource(context.resources, resolveSmallIcon(context))
+                val logoResId = resolveNamedResourceId(context, "logo")
+                if (logoResId != null) {
+                    BitmapFactory.decodeResource(context.resources, logoResId)
+                } else {
+                    BitmapFactory.decodeResource(context.resources, resolveSmallIcon(context))
+                }
             } catch (_: Throwable) {
                 null
             }
@@ -1299,6 +1309,7 @@ class FlutterLocalNotificationPluginsPlugin :
             channelId = channelId,
             channelName = channelName,
             channelDescription = channelDescription,
+            mediaImage = call.argument("mediaBackgroundImageName"),
         )
         result.success(null)
     }
@@ -1434,6 +1445,10 @@ class FlutterLocalNotificationPluginsPlugin :
                 putExtra(EXTRA_CHANNEL_ID, resolvedChannelId)
                 putExtra(EXTRA_CHANNEL_NAME, resolvedChannelName)
                 putExtra(EXTRA_CHANNEL_DESCRIPTION, resolvedChannelDescription)
+                putExtra(
+                    EXTRA_MEDIA_BACKGROUND_IMAGE_NAME,
+                    call.argument<String>("mediaBackgroundImageName"),
+                )
                 putExtra(EXTRA_PRIORITY, resolvedPriority)
                 putExtra(EXTRA_IMPORTANCE, resolvedImportance)
                 val styleInformation = notificationDetails?.get("styleInformation") as? Map<*, *>
