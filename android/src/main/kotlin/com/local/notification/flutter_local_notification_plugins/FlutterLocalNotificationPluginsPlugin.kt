@@ -79,11 +79,15 @@ class FlutterLocalNotificationPluginsPlugin :
         private const val EXTRA_NOTIFICATION_LIST = "notificationList"
         private const val EXTRA_REPEAT_INTERVAL = "repeatIntervalMilliseconds"
         private const val EXTRA_CLICK_EVENT = "flutter_local_notification_click_event"
+        private const val EXTRA_MEDIA_ACTION = "flutter_local_notification_media_action"
         private const val EXTRA_PRIORITY = "priority"
         private const val EXTRA_IMPORTANCE = "importance"
         private const val EXTRA_STYLE = "style"
         private const val EXTRA_STYLE_IMAGE = "styleImage"
         private const val EXTRA_REPLACE_EXISTING = "replaceExisting"
+        private const val MEDIA_ACTION_PREVIOUS = "media_previous"
+        private const val MEDIA_ACTION_TOGGLE = "media_toggle"
+        private const val MEDIA_ACTION_NEXT = "media_next"
         private const val TAG = "LocalNotificationPlugin"
         private const val UNLOCK_BASE_ID = 10002
         private const val FCM_BASE_ID = 10003
@@ -318,35 +322,34 @@ class FlutterLocalNotificationPluginsPlugin :
                     }
                 val isMediaNotification = payload == "media" || !mediaImage.isNullOrEmpty()
                 val builder =
-                    NotificationCompat.Builder(context, runtimeChannelId)
-                        .setSmallIcon(resolveSmallIcon(context))
-                        .setContentTitle(displayTitle)
-                        .setContentText(body)
-                        .setPriority(
-                            if (isMediaNotification) {
-                                NotificationCompat.PRIORITY_MAX
-                            } else {
-                                priority
-                            },
+                    if (isMediaNotification) {
+                        buildMediaNotificationBuilder(
+                            context = context,
+                            channelId = runtimeChannelId,
+                            title = displayTitle,
+                            body = body,
+                            contentIntent = clickPendingIntent,
+                            mediaImage = mediaImage,
+                            notificationId = id,
                         )
-                        .setCategory(
-                            if (isMediaNotification) {
-                                NotificationCompat.CATEGORY_TRANSPORT
-                            } else {
-                                NotificationCompat.CATEGORY_REMINDER
-                            },
-                        )
-                        .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-                        .setDefaults(Notification.DEFAULT_ALL)
-                        .setVibrate(longArrayOf(0, 180, 120, 180))
-                        .setAutoCancel(!isMediaNotification)
-                        .setOnlyAlertOnce(isMediaNotification)
-                        .setOngoing(isMediaNotification)
-                        .setSilent(isMediaNotification)
-                        .setShowWhen(true)
-                        .setWhen(System.currentTimeMillis())
-                        .setExtras(android.os.Bundle().apply { putString(EXTRA_PAYLOAD, payload) })
-                        .setContentIntent(clickPendingIntent)
+                    } else {
+                        NotificationCompat.Builder(context, runtimeChannelId)
+                            .setSmallIcon(resolveSmallIcon(context))
+                            .setContentTitle(displayTitle)
+                            .setContentText(body)
+                            .setPriority(priority)
+                            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+                            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                            .setDefaults(Notification.DEFAULT_ALL)
+                            .setVibrate(longArrayOf(0, 180, 120, 180))
+                            .setAutoCancel(true)
+                            .setOnlyAlertOnce(false)
+                            .setOngoing(false)
+                            .setShowWhen(true)
+                            .setWhen(System.currentTimeMillis())
+                            .setExtras(android.os.Bundle().apply { putString(EXTRA_PAYLOAD, payload) })
+                            .setContentIntent(clickPendingIntent)
+                    }
                 val customImageValue =
                     if (payload == "fcm" && !customLayoutImageValue.isNullOrEmpty()) {
                         customLayoutImageValue
@@ -372,8 +375,6 @@ class FlutterLocalNotificationPluginsPlugin :
                         builder,
                         beautyTemplate.copy(beautyTitle = displayTitle ?: beautyTemplate.beautyTitle),
                     )
-                } else if (!appliedCustomLayout && !mediaImage.isNullOrEmpty()) {
-                    applyMediaStyle(context, builder, mediaImage)
                 }
                 val notificationManager = NotificationManagerCompat.from(context)
                 if (replaceExistingMedia && payload == "media") {
@@ -397,11 +398,15 @@ class FlutterLocalNotificationPluginsPlugin :
             }
         }
 
-        private fun applyMediaStyle(
+        private fun buildMediaNotificationBuilder(
             context: Context,
-            builder: NotificationCompat.Builder,
-            imageValue: String,
-        ) {
+            channelId: String,
+            title: String?,
+            body: String?,
+            contentIntent: PendingIntent?,
+            mediaImage: String?,
+            notificationId: Int,
+        ): NotificationCompat.Builder {
             val mediaSession =
                 MediaSessionCompat(context, "MediaSessionFlutterLocalNotification").apply {
                     setFlags(
@@ -411,6 +416,13 @@ class FlutterLocalNotificationPluginsPlugin :
                     isActive = true
                     setPlaybackState(
                         PlaybackStateCompat.Builder()
+                            .setActions(
+                                PlaybackStateCompat.ACTION_PLAY or
+                                    PlaybackStateCompat.ACTION_PAUSE or
+                                    PlaybackStateCompat.ACTION_PLAY_PAUSE or
+                                    PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS or
+                                    PlaybackStateCompat.ACTION_SKIP_TO_NEXT,
+                            )
                             .setState(
                                 PlaybackStateCompat.STATE_PLAYING,
                                 0L,
@@ -418,14 +430,67 @@ class FlutterLocalNotificationPluginsPlugin :
                             ).build(),
                     )
                 }
-            builder.setStyle(
-                MediaStyle().setMediaSession(mediaSession.sessionToken),
-            )
+            val previousIntent =
+                createMediaActionPendingIntent(
+                    context = context,
+                    notificationId = notificationId,
+                    mediaAction = MEDIA_ACTION_PREVIOUS,
+                )
+            val toggleIntent =
+                createMediaActionPendingIntent(
+                    context = context,
+                    notificationId = notificationId,
+                    mediaAction = MEDIA_ACTION_TOGGLE,
+                )
+            val nextIntent =
+                createMediaActionPendingIntent(
+                    context = context,
+                    notificationId = notificationId,
+                    mediaAction = MEDIA_ACTION_NEXT,
+                )
+            val builder =
+                NotificationCompat.Builder(context, channelId)
+                    .setSmallIcon(resolveSmallIcon(context))
+                    .setStyle(
+                        MediaStyle()
+                            .setMediaSession(mediaSession.sessionToken)
+                            .setShowActionsInCompactView(0, 1, 2),
+                    ).setContentIntent(contentIntent)
+                    .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                    .setPriority(NotificationCompat.PRIORITY_MAX)
+                    .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
+                    .setOnlyAlertOnce(true)
+                    .setOngoing(true)
+                    .setSilent(true)
+                    .setAutoCancel(false)
+                    .setContentTitle(title)
+                    .setContentText(body)
+            previousIntent?.let {
+                builder.addAction(
+                    android.R.drawable.ic_media_previous,
+                    "Previous",
+                    it,
+                )
+            }
+            toggleIntent?.let {
+                builder.addAction(
+                    android.R.drawable.ic_media_pause,
+                    "Pause",
+                    it,
+                )
+            }
+            nextIntent?.let {
+                builder.addAction(
+                    android.R.drawable.ic_media_next,
+                    "Next",
+                    it,
+                )
+            }
             val bitmap =
-                if (imageValue.startsWith("http")) {
-                    loadNotificationBitmap(context, imageValue)
+                if (!mediaImage.isNullOrBlank() && mediaImage.startsWith("http")) {
+                    loadNotificationBitmap(context, mediaImage)
                 } else {
-                    val imageResId = resolveNamedResourceId(context, imageValue)
+                    val imageResId = resolveNamedResourceId(context, mediaImage ?: "")
                     if (imageResId != null) {
                         Glide.with(context)
                             .asBitmap()
@@ -441,6 +506,7 @@ class FlutterLocalNotificationPluginsPlugin :
             } else {
                 builder.setLargeIcon(resolveFallbackLargeIcon(context))
             }
+            return builder
         }
 
         private fun resolveFallbackLargeIcon(context: Context): Bitmap? {
@@ -449,6 +515,27 @@ class FlutterLocalNotificationPluginsPlugin :
             } catch (_: Throwable) {
                 null
             }
+        }
+
+        private fun createMediaActionPendingIntent(
+            context: Context,
+            notificationId: Int,
+            mediaAction: String,
+        ): PendingIntent? {
+            val launchIntent =
+                context.packageManager.getLaunchIntentForPackage(context.packageName)?.apply {
+                    putExtra(EXTRA_CLICK_EVENT, true)
+                    putExtra(EXTRA_ID, notificationId)
+                    putExtra(EXTRA_MEDIA_ACTION, mediaAction)
+                    putExtra(EXTRA_PAYLOAD, "media")
+                    addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                } ?: return null
+            return PendingIntent.getActivity(
+                context,
+                notificationId + mediaAction.hashCode(),
+                launchIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
         }
 
         private fun wakeScreenIfNeeded(context: Context) {
