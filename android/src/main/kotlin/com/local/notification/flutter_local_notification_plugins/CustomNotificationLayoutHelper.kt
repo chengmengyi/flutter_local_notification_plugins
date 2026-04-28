@@ -25,6 +25,7 @@ object CustomNotificationLayoutHelper {
     private const val ID_TITLE = "fln_notify_title"
     private const val ID_BODY = "fln_notify_body"
     private const val ID_ACTION_TEXT = "fln_notify_action_text"
+    private const val ID_DEBUG_ACTION = "fln_notify_debug_action"
     private const val ID_LARGE_IMAGE = "fln_notify_large_img"
 
     data class Config(
@@ -81,6 +82,7 @@ object CustomNotificationLayoutHelper {
         body: String?,
         clickPendingIntent: PendingIntent?,
         imageValue: String? = null,
+        debugActionText: String? = null,
     ): Boolean {
         if (!supportsPayload(payload)) {
             return false
@@ -95,6 +97,7 @@ object CustomNotificationLayoutHelper {
                 body = body,
                 clickPendingIntent = clickPendingIntent,
                 imageValue = imageValue,
+                debugActionText = debugActionText,
             ) ?: return false
         val bigRemoteViews =
             buildRemoteViews(
@@ -105,6 +108,7 @@ object CustomNotificationLayoutHelper {
                 body = body,
                 clickPendingIntent = clickPendingIntent,
                 imageValue = imageValue,
+                debugActionText = debugActionText,
                 bindLargeImage = true,
             ) ?: smallRemoteViews
         builder.setCustomContentView(smallRemoteViews)
@@ -121,6 +125,7 @@ object CustomNotificationLayoutHelper {
         body: String?,
         clickPendingIntent: PendingIntent?,
         imageValue: String?,
+        debugActionText: String?,
         bindLargeImage: Boolean = false,
     ): RemoteViews? {
         val layoutId = resolveIdentifier(context, layoutName, "layout") ?: return null
@@ -145,6 +150,13 @@ object CustomNotificationLayoutHelper {
             idName = ID_ACTION_TEXT,
             text = config.actionText,
             hideWhenEmpty = false,
+        )
+        bindText(
+            context = context,
+            views = views,
+            idName = ID_DEBUG_ACTION,
+            text = debugActionText,
+            hideWhenEmpty = true,
         )
         if (clickPendingIntent != null) {
             bindClick(context, views, ID_ROOT, clickPendingIntent)

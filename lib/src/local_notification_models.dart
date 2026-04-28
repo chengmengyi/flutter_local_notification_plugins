@@ -1,15 +1,35 @@
+enum LocalNotificationPayload {
+  local('local'),
+  lock('lock'),
+  fcm('fcm'),
+  media('media');
+
+  const LocalNotificationPayload(this.value);
+
+  final String value;
+
+  static LocalNotificationPayload? fromValue(String? value) {
+    for (final payload in values) {
+      if (payload.value == value) {
+        return payload;
+      }
+    }
+    return null;
+  }
+}
+
 class LocalNotificationContent {
   const LocalNotificationContent({this.title, this.body, this.payload});
 
   final String? title;
   final String? body;
-  final String? payload;
+  final LocalNotificationPayload? payload;
 
   /// 转成原生层可识别的通知内容。
   Map<String, Object?> toMap() => <String, Object?>{
     'title': title,
     'body': body,
-    'payload': payload ?? '',
+    'payload': payload?.value ?? '',
   };
 
   /// 从原生层返回的数据生成通知内容对象。
@@ -17,7 +37,7 @@ class LocalNotificationContent {
     return LocalNotificationContent(
       title: map['title']?.toString(),
       body: map['body']?.toString(),
-      payload: map['payload']?.toString(),
+      payload: LocalNotificationPayload.fromValue(map['payload']?.toString()),
     );
   }
 }

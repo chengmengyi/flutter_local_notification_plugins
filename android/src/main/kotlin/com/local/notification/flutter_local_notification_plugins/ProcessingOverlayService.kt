@@ -22,8 +22,6 @@ import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.ImageView
-import android.widget.ProgressBar
-import android.widget.TextView
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import kotlin.math.abs
@@ -143,9 +141,7 @@ class ProcessingOverlayService : Service() {
     private var overlayView: View? = null
     private var overlayLayoutParams: WindowManager.LayoutParams? = null
     private var logoView: ImageView? = null
-    private var titleView: TextView? = null
-    private var progressView: ProgressBar? = null
-    private var percentView: TextView? = null
+    private var progressRingView: ProcessingOverlayProgressRingView? = null
     private var currentTaskId: String = ""
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -215,12 +211,11 @@ class ProcessingOverlayService : Service() {
                 FrameLayout(this),
                 false,
             )
-        val overlayHeight = resolveOverlayHeight(rootView)
         logoView = rootView.findViewById(R.id.fln_processing_logo)
-        titleView = rootView.findViewById(R.id.fln_processing_overlay_title)
-        progressView = rootView.findViewById(R.id.fln_processing_overlay_progress)
-        percentView = rootView.findViewById(R.id.fln_processing_overlay_percent)
+        progressRingView = rootView.findViewById(R.id.fln_processing_overlay_progress_ring)
+        applyOverlaySizes(rootView)
         bindAppLogo()
+        val overlayHeight = resolveOverlayHeight(rootView)
         val params =
             WindowManager.LayoutParams(
                 resolveOverlayWidthPx(),
@@ -247,6 +242,16 @@ class ProcessingOverlayService : Service() {
         } catch (e: Exception) {
             Log.d(TAG, "ensureOverlayView failed error=${e.message}")
         }
+    }
+
+    private fun applyOverlaySizes(rootView: View) {
+        val overlaySize = screenWToPx(68)
+        val iconSize = screenWToPx(56)
+        rootView.layoutParams = ViewGroup.LayoutParams(overlaySize, overlaySize)
+        progressRingView?.layoutParams =
+            FrameLayout.LayoutParams(overlaySize, overlaySize, Gravity.CENTER)
+        logoView?.layoutParams =
+            FrameLayout.LayoutParams(iconSize, iconSize, Gravity.CENTER)
     }
 
     private fun resolveOverlayHeight(rootView: View): Int {
@@ -328,11 +333,7 @@ class ProcessingOverlayService : Service() {
     }
 
     private fun resolveOverlayWidthPx(): Int {
-        val displayMetrics = resources.displayMetrics
-        val screenWidth = displayMetrics.widthPixels
-        val preferredWidth = dpToPx(340)
-        val horizontalMargin = dpToPx(20) * 2
-        return preferredWidth.coerceAtMost((screenWidth - horizontalMargin).coerceAtLeast(dpToPx(260)))
+        return screenWToPx(68)
     }
 
     private fun resolveOverlayMinY(): Int {
@@ -359,11 +360,12 @@ class ProcessingOverlayService : Service() {
         return (value * resources.displayMetrics.density).roundToInt()
     }
 
+    private fun screenWToPx(value: Int): Int {
+        return (value * resources.displayMetrics.widthPixels / 375f).roundToInt()
+    }
+
     private fun updateOverlayView(state: OverlayState) {
-        titleView?.text =
-            state.title.ifBlank { getStringResource(R.string.fln_processing_overlay_default_title) }
-        progressView?.progress = state.progressPercent
-        percentView?.text = "${state.progressPercent}%"
+        progressRingView?.progress = state.progressPercent
     }
 
     private fun removeOverlayView() {
@@ -376,9 +378,7 @@ class ProcessingOverlayService : Service() {
         overlayView = null
         overlayLayoutParams = null
         logoView = null
-        titleView = null
-        progressView = null
-        percentView = null
+        progressRingView = null
     }
 
     private fun handleOverlayClick() {
@@ -407,7 +407,6 @@ class ProcessingOverlayService : Service() {
         } catch (e: Exception) {
             Log.d(TAG, "handleOverlayClick failed error=${e.message}")
         }
-        stopSelf()
     }
 
     private fun ensureForegroundNotification(

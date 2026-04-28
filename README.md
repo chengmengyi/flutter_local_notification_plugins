@@ -59,12 +59,15 @@ final notificationPlugin = FlutterLocalNotificationPlugins.instance;
 
 ### 3. 注册监听
 
-建议在应用启动时尽早注册监听，这样前台点击通知和点击悬浮层都能收到回调。
+建议在应用启动时尽早注册监听，这样 Android 通知展示、前台点击通知和点击悬浮层都能收到回调。
 
 ```dart
 final notificationPlugin = FlutterLocalNotificationPlugins.instance;
 
 notificationPlugin.setListeners(
+  onNotificationDisplayed: (event) {
+    debugPrint('通知已展示: id=${event.id}, payload=${event.payload}');
+  },
   onNotificationClicked: (event) {
     debugPrint('通知被点击: id=${event.id}, payload=${event.payload}');
   },
@@ -134,6 +137,9 @@ Future<void> main() async {
   final notificationPlugin = FlutterLocalNotificationPlugins.instance;
 
   notificationPlugin.setListeners(
+    onNotificationDisplayed: (event) {
+      debugPrint('Android 通知已展示: ${event.payload}');
+    },
     onNotificationClicked: (event) {
       debugPrint('前台点击通知: ${event.payload}');
     },
@@ -164,7 +170,7 @@ await notificationPlugin.show(
   id: 1,
   title: '新消息',
   body: '你有一条新的提醒',
-  payload: 'message_detail',
+  payload: LocalNotificationPayload.local,
   clickPayload: '{"page":"message","id":1}',
 );
 ```
@@ -179,10 +185,12 @@ await notificationPlugin.show(
 
 ### 获取已展示通知数量
 
-这个方法会返回数量，并在读取后清空计数。
+这个方法会按 `payload` 返回数量，并在读取后清空该 `payload` 的计数。
 
 ```dart
-final count = await notificationPlugin.consumeDisplayedNotificationCount();
+final count = await notificationPlugin.consumeDisplayedNotificationCount(
+  payload: LocalNotificationPayload.local,
+);
 debugPrint('已展示通知数量: $count');
 ```
 
@@ -203,7 +211,7 @@ await notificationPlugin.periodicallyShowWithDuration(
   title: '喝水提醒',
   body: '记得补充水分',
   repeatDurationInterval: const Duration(minutes: 30),
-  payload: 'local',
+  payload: LocalNotificationPayload.local,
 );
 ```
 
@@ -213,17 +221,17 @@ await notificationPlugin.periodicallyShowWithDuration(
 await notificationPlugin.periodicallyShowWithDuration(
   id: 101,
   repeatDurationInterval: const Duration(minutes: 30),
-  payload: 'local',
+  payload: LocalNotificationPayload.local,
   notificationList: const [
     LocalNotificationContent(
       title: '休息一下',
       body: '起来活动活动',
-      payload: 'break_1',
+      payload: LocalNotificationPayload.local,
     ),
     LocalNotificationContent(
       title: '喝口水',
       body: '别忘了补水',
-      payload: 'break_2',
+      payload: LocalNotificationPayload.local,
     ),
   ],
 );
@@ -237,7 +245,7 @@ await notificationPlugin.periodicallyShowWithDuration(
 await notificationPlugin.periodicallyShowWithDuration(
   id: 102,
   repeatDurationInterval: const Duration(minutes: 15),
-  payload: 'media',
+  payload: LocalNotificationPayload.media,
   notificationDetails: AndroidNotificationDetails(
     'media_channel',
     'Media Notifications',
@@ -251,7 +259,7 @@ await notificationPlugin.periodicallyShowWithDuration(
     LocalNotificationContent(
       title: '媒体通知',
       body: '这是一条媒体样式通知',
-      payload: 'media',
+      payload: LocalNotificationPayload.media,
     ),
   ],
 );
@@ -401,6 +409,9 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   notificationPlugin.setListeners(
+    onNotificationDisplayed: (event) {
+      debugPrint('展示通知 payload=${event.payload}');
+    },
     onNotificationClicked: (event) {
       debugPrint('点击通知 payload=${event.payload}');
     },
@@ -439,7 +450,7 @@ class MyApp extends StatelessWidget {
                 id: 1,
                 title: '测试通知',
                 body: '这是一条本地通知',
-                payload: 'test_payload',
+                payload: LocalNotificationPayload.local,
               );
             },
             child: const Text('发送通知'),
@@ -454,7 +465,9 @@ class MyApp extends StatelessWidget {
 ## 注意事项
 
 - 建议在应用启动早期调用 `setListeners()` 和 `initNotification()`
-- `consumeDisplayedNotificationCount()` 和 `consumeProcessingOverlayLaunchTaskId()` 都是“读取后清空”
+- Android 通知展示时，如果 Flutter 还活着会触发 `onNotificationDisplayed`；否则会累计到本地，可通过 `consumeDisplayedNotificationCount(payload: ...)` 读取
+- `payload` 使用 `LocalNotificationPayload` 枚举，避免手写字符串导致展示计数读取不到
+- `consumeDisplayedNotificationCount(payload: ...)` 和 `consumeProcessingOverlayLaunchTaskId()` 都是“读取后清空”
 - Android 悬浮层功能需要系统悬浮窗权限
 - iOS 当前没有暴露单独的通知权限申请方法，宿主工程需要自行确保通知权限已授权
 - `subscribeToTopic()` 依赖 Firebase Messaging，使用前请先完成 Firebase 配置

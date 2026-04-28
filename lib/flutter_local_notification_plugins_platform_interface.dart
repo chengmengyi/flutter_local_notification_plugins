@@ -30,8 +30,8 @@ abstract class FlutterLocalNotificationPluginsPlatform
     throw UnimplementedError('platformVersion() has not been implemented.');
   }
 
-  /// 取出并清空已展示通知数量。
-  Future<int> consumeDisplayedNotificationCount() {
+  /// 按 payload 取出并清空已展示通知数量。
+  Future<int> consumeDisplayedNotificationCount({required String payload}) {
     throw UnimplementedError(
       'consumeDisplayedNotificationCount() has not been implemented.',
     );
@@ -182,6 +182,7 @@ abstract class FlutterLocalNotificationPluginsPlatform
     String? payload,
     String? clickPayload,
     String? mediaBackgroundImageName,
+    Map<String, Object?>? notificationDetails,
   }) {
     throw UnimplementedError('show() has not been implemented.');
   }

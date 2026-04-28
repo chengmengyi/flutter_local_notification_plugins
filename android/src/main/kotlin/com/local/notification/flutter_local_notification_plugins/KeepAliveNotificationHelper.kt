@@ -660,7 +660,15 @@ object KeepAliveNotificationHelper {
                 displayId,
                 builder.build(),
             )
-            increaseDisplayedNotificationCount(context)
+            FlutterLocalNotificationPluginsPlugin.dispatchNotificationDisplayed(
+                context,
+                mapOf(
+                    "id" to displayId,
+                    "title" to title,
+                    "body" to body,
+                    "payload" to payload,
+                ),
+            )
             wakeScreenIfNeeded(context)
             Log.d(TAG, "showStoredLocalNotification success source=$source title=$title")
             return true
@@ -817,9 +825,17 @@ object KeepAliveNotificationHelper {
         return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     }
 
-    private fun increaseDisplayedNotificationCount(context: Context) {
-        val currentCount = prefs(context).getInt(KEY_DISPLAYED_NOTIFICATION_COUNT, 0)
-        prefs(context).edit().putInt(KEY_DISPLAYED_NOTIFICATION_COUNT, currentCount + 1).apply()
+    private fun displayedNotificationCountKey(payload: String?): String {
+        return "${KEY_DISPLAYED_NOTIFICATION_COUNT}_${payload ?: ""}"
+    }
+
+    private fun increaseDisplayedNotificationCount(
+        context: Context,
+        payload: String?,
+    ) {
+        val key = displayedNotificationCountKey(payload)
+        val currentCount = prefs(context).getInt(key, 0)
+        prefs(context).edit().putInt(key, currentCount + 1).apply()
     }
 
     private fun ensureNotificationChannel(

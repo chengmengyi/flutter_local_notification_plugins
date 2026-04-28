@@ -13,6 +13,7 @@ class MethodChannelFlutterLocalNotificationPlugins
     'flutter_local_notification_plugins',
   );
 
+  ValueChanged<LocalNotificationEvent>? onNotificationDisplayed;
   ValueChanged<LocalNotificationEvent>? onNotificationClicked;
   ValueChanged<String>? onProcessingOverlayClicked;
 
@@ -29,11 +30,14 @@ class MethodChannelFlutterLocalNotificationPlugins
     return version;
   }
 
-  /// 通过原生通道取出并清空已展示通知数量。
+  /// 通过原生通道按 payload 取出并清空已展示通知数量。
   @override
-  Future<int> consumeDisplayedNotificationCount() async {
+  Future<int> consumeDisplayedNotificationCount({
+    required String payload,
+  }) async {
     final result = await methodChannel.invokeMethod<int>(
       'consumeDisplayedNotificationCount',
+      {'payload': payload},
     );
     return result ?? 0;
   }
@@ -215,16 +219,16 @@ class MethodChannelFlutterLocalNotificationPlugins
   }) {
     return methodChannel
         .invokeMethod<void>('showPersistentShortcutNotification', {
-          'homeText': homeText,
-          'mergeText': mergeText,
-          'importText': importText,
-          'convertText': convertText,
-          'homeIcon': homeIcon,
-          'mergeIcon': mergeIcon,
-          'importIcon': importIcon,
-          'convertIcon': convertIcon,
-          'customLayout': customLayout,
-        });
+      'homeText': homeText,
+      'mergeText': mergeText,
+      'importText': importText,
+      'convertText': convertText,
+      'homeIcon': homeIcon,
+      'mergeIcon': mergeIcon,
+      'importIcon': importIcon,
+      'convertIcon': convertIcon,
+      'customLayout': customLayout,
+    });
   }
 
   /// 通过原生通道立即显示一条通知。
@@ -236,6 +240,7 @@ class MethodChannelFlutterLocalNotificationPlugins
     String? payload,
     String? clickPayload,
     String? mediaBackgroundImageName,
+    Map<String, Object?>? notificationDetails,
   }) {
     return methodChannel.invokeMethod<void>('show', {
       'id': id,
@@ -244,6 +249,7 @@ class MethodChannelFlutterLocalNotificationPlugins
       'payload': payload ?? '',
       'clickPayload': clickPayload,
       'mediaBackgroundImageName': mediaBackgroundImageName,
+      'notificationDetails': notificationDetails,
     });
   }
 
@@ -279,14 +285,18 @@ class MethodChannelFlutterLocalNotificationPlugins
   }) {
     return methodChannel
         .invokeMethod<void>('startUnlockTriggeredNotifications', {
-          'intervalMilliseconds': interval.inMilliseconds,
-          'notificationList': notificationList,
-        });
+      'intervalMilliseconds': interval.inMilliseconds,
+      'notificationList': notificationList,
+    });
   }
 
   /// 处理原生层主动回传的方法调用。
   Future<void> _handleMethodCall(MethodCall call) async {
     switch (call.method) {
+      case 'onNotificationDisplayed':
+        final args = (call.arguments as Map?) ?? <dynamic, dynamic>{};
+        onNotificationDisplayed?.call(LocalNotificationEvent.fromMap(args));
+        break;
       case 'onNotificationClicked':
         final args = (call.arguments as Map?) ?? <dynamic, dynamic>{};
         onNotificationClicked?.call(LocalNotificationEvent.fromMap(args));

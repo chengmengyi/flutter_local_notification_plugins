@@ -26,7 +26,8 @@ public class FlutterLocalNotificationPluginsPlugin: NSObject, FlutterPlugin, UNU
     case "getPlatformVersion":
       result("iOS " + UIDevice.current.systemVersion)
     case "consumeDisplayedNotificationCount":
-      result(consumeDisplayedNotificationCount())
+      let args = call.arguments as? [String: Any]
+      result(consumeDisplayedNotificationCount(payload: args?["payload"] as? String))
     case "configureBlockedManufacturers":
       result(nil)
     case "isSamsungDevice":
@@ -96,7 +97,7 @@ public class FlutterLocalNotificationPluginsPlugin: NSObject, FlutterPlugin, UNU
         if let error {
           result(FlutterError(code: "show_failed", message: error.localizedDescription, details: nil))
         } else {
-          Self.increaseDisplayedNotificationCount()
+          Self.increaseDisplayedNotificationCount(payload: content.userInfo["displayPayload"] as? String)
           result(nil)
         }
       }
@@ -180,6 +181,7 @@ public class FlutterLocalNotificationPluginsPlugin: NSObject, FlutterPlugin, UNU
     content.sound = .default
     content.userInfo = [
       "payload": clickPayload,
+      "displayPayload": payload,
       "channelId": channelId,
       "channelName": channelName,
       "channelDescription": channelDescription
@@ -216,7 +218,8 @@ public class FlutterLocalNotificationPluginsPlugin: NSObject, FlutterPlugin, UNU
     willPresent notification: UNNotification,
     withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
   ) {
-    Self.increaseDisplayedNotificationCount()
+    let payload = notification.request.content.userInfo["displayPayload"] as? String
+    Self.increaseDisplayedNotificationCount(payload: payload)
     if #available(iOS 14.0, *) {
       completionHandler([.banner, .badge, .sound, .list])
     } else {
@@ -243,14 +246,20 @@ public class FlutterLocalNotificationPluginsPlugin: NSObject, FlutterPlugin, UNU
     completionHandler()
   }
 
-  private static func increaseDisplayedNotificationCount() {
-    let currentCount = UserDefaults.standard.integer(forKey: displayedNotificationCountKey)
-    UserDefaults.standard.set(currentCount + 1, forKey: displayedNotificationCountKey)
+  private static func displayedNotificationCountStorageKey(payload: String?) -> String {
+    "\(displayedNotificationCountKey)_\(payload ?? "")"
   }
 
-  private func consumeDisplayedNotificationCount() -> Int {
-    let count = UserDefaults.standard.integer(forKey: Self.displayedNotificationCountKey)
-    UserDefaults.standard.removeObject(forKey: Self.displayedNotificationCountKey)
+  private static func increaseDisplayedNotificationCount(payload: String?) {
+    let key = displayedNotificationCountStorageKey(payload: payload)
+    let currentCount = UserDefaults.standard.integer(forKey: key)
+    UserDefaults.standard.set(currentCount + 1, forKey: key)
+  }
+
+  private func consumeDisplayedNotificationCount(payload: String?) -> Int {
+    let key = Self.displayedNotificationCountStorageKey(payload: payload)
+    let count = UserDefaults.standard.integer(forKey: key)
+    UserDefaults.standard.removeObject(forKey: key)
     return count
   }
 

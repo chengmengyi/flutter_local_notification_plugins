@@ -1,60 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="68dp"
     android:layout_height="68dp"
-    android:paddingLeft="10dp"
-    android:paddingRight="10dp"
-    android:gravity="center_vertical"
-    android:background="@drawable/fln_processing_overlay_card_bg">
+    android:clipChildren="false"
+    android:clipToPadding="false">
+
+    <com.local.notification.flutter_local_notification_plugins.ProcessingOverlayProgressRingView
+        android:id="@+id/fln_processing_overlay_progress_ring"
+        android:layout_width="68dp"
+        android:layout_height="68dp"
+        android:layout_gravity="center" />
 
     <ImageView
         android:id="@+id/fln_processing_logo"
-        android:layout_width="46dp"
-        android:layout_height="46dp"
-        android:background="@drawable/fln_processing_overlay_logo_bg"
+        android:layout_width="50dp"
+        android:layout_height="50dp"
+        android:layout_gravity="center"
         android:clipToOutline="true"
         android:scaleType="centerCrop" />
-    <LinearLayout
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:orientation="vertical"
-        android:layout_marginLeft="8dp">
-        <TextView
-            android:id="@+id/fln_processing_overlay_title"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:maxLines="1"
-            android:text="AI Processing..."
-            android:textColor="#4A1919"
-            android:textSize="17sp"
-            android:textStyle="bold" />
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:gravity="center_vertical"
-            android:orientation="horizontal">
-
-            <ProgressBar
-                android:id="@+id/fln_processing_overlay_progress"
-                style="?android:attr/progressBarStyleHorizontal"
-                android:layout_width="0dp"
-                android:layout_height="12dp"
-                android:layout_weight="1"
-                android:max="100"
-                android:progress="0"
-                android:progressDrawable="@drawable/fln_processing_overlay_progress_drawable" />
-
-            <TextView
-                android:id="@+id/fln_processing_overlay_percent"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="12dp"
-                android:text="0%"
-                android:textColor="#D24343"
-                android:textSize="17sp"
-                android:textStyle="bold" />
-        </LinearLayout>
-    </LinearLayout>
-</LinearLayout>
+</FrameLayout>
