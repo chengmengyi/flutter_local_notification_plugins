@@ -19,6 +19,7 @@ enum LocalNotificationPayload {
 
   final String value;
 
+
   static LocalNotificationPayload? fromValue(String? value) {
     final normalizedValue = value?.trim();
     for (final payload in values) {
