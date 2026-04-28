@@ -60,6 +60,8 @@ object KeepAliveNotificationHelper {
     private const val EXTRA_BODY = "body"
     private const val EXTRA_PAYLOAD = "payload"
     private const val EXTRA_CLICK_EVENT = "flutter_local_notification_click_event"
+    private const val ACTION_NOTIFICATION_CLICK =
+        "com.local.notification.flutter_local_notification_plugins.NOTIFICATION_CLICK"
     private const val SHORTCUT_NOTIFICATION_ID = 10004
     private const val SHORTCUT_CHANNEL_ID = "pdf_flow_shortcut_channel"
     private const val SHORTCUT_CHANNEL_NAME = "PDF Flow Shortcuts"
@@ -610,16 +612,15 @@ object KeepAliveNotificationHelper {
                 )
             val displayId = (System.currentTimeMillis() % Int.MAX_VALUE).toInt()
             val clickIntent =
-                context.packageManager.getLaunchIntentForPackage(context.packageName)?.apply {
+                createNotificationClickIntent(context).apply {
                     putExtra(EXTRA_CLICK_EVENT, true)
                     putExtra(EXTRA_ID, displayId)
                     putExtra(EXTRA_TITLE, title)
                     putExtra(EXTRA_BODY, body)
                     putExtra(EXTRA_PAYLOAD, payload)
-                    addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
                 }
             val clickPendingIntent =
-                clickIntent?.let {
+                clickIntent.let {
                     PendingIntent.getActivity(
                         context,
                         displayId,
@@ -953,6 +954,16 @@ object KeepAliveNotificationHelper {
         return if (icon != 0) icon else android.R.drawable.ic_dialog_info
     }
 
+    private fun createNotificationClickIntent(context: Context): Intent {
+        return Intent(context, NotificationClickActivity::class.java).apply {
+            action = ACTION_NOTIFICATION_CLICK
+            addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_NO_ANIMATION,
+            )
+        }
+    }
+
     private fun createShortcutClickPendingIntent(
         context: Context,
         requestCode: Int,
@@ -960,18 +971,13 @@ object KeepAliveNotificationHelper {
         title: String,
     ): PendingIntent? {
         val clickIntent =
-            context.packageManager.getLaunchIntentForPackage(context.packageName)?.apply {
+            createNotificationClickIntent(context).apply {
                 putExtra(EXTRA_CLICK_EVENT, true)
                 putExtra(EXTRA_ID, SHORTCUT_NOTIFICATION_ID)
                 putExtra(EXTRA_TITLE, title)
                 putExtra(EXTRA_BODY, "")
                 putExtra(EXTRA_PAYLOAD, payload)
-                addFlags(
-                    Intent.FLAG_ACTIVITY_NEW_TASK or
-                        Intent.FLAG_ACTIVITY_SINGLE_TOP or
-                        Intent.FLAG_ACTIVITY_CLEAR_TOP,
-                )
-            } ?: return null
+            }
         return PendingIntent.getActivity(
             context,
             requestCode,

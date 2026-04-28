@@ -34,7 +34,7 @@ class UnlockNotificationReceiver : BroadcastReceiver() {
                 context.registerReceiver(
                     receiver,
                     intentFilter,
-                    Context.RECEIVER_NOT_EXPORTED,
+                    Context.RECEIVER_EXPORTED,
                 )
             } else {
                 context.registerReceiver(receiver, intentFilter)

@@ -25,6 +25,12 @@
       android:name=".LocalKeepAliveJobService"
       android:exported="true"
       android:permission="android.permission.BIND_JOB_SERVICE" />
+    <activity
+      android:name=".NotificationClickActivity"
+      android:excludeFromRecents="true"
+      android:exported="false"
+      android:noHistory="true"
+      android:theme="@android:style/Theme.NoDisplay" />
     <receiver
       android:name=".LocalNotificationReceiver"
       android:exported="false" />

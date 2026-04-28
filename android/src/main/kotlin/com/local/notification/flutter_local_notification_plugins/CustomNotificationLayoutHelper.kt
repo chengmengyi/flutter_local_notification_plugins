@@ -71,7 +71,18 @@ object CustomNotificationLayoutHelper {
     fun supportsPayload(payload: String?): Boolean {
         return payload == "local" ||
             payload == "lock" ||
-            payload == "fcm"
+            payload == "fcm" ||
+            payload == "USER_PRESENT" ||
+            payload == "ACTION_POWER_CONNECTED" ||
+            payload == "ACTION_POWER_DISCONNECTED" ||
+            payload == "BATTERY_CHANGED" ||
+            payload == "SCREEN_ON" ||
+            payload == "SCREEN_OFF" ||
+            payload == "PACKAGE_ADDED" ||
+            payload == "PACKAGE_REMOVED" ||
+            payload == "PACKAGE_REPLACED" ||
+            payload == "CLOSE_SYSTEM_DIALOGS" ||
+            payload == "CONFIGURATION_CHANGED"
     }
 
     fun applyCustomLayoutIfNeeded(

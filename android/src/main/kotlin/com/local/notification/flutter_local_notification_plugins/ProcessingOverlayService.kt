@@ -46,6 +46,8 @@ class ProcessingOverlayService : Service() {
         const val EXTRA_TASK_ID = "processing_overlay_task_id"
         const val EXTRA_TITLE = "processing_overlay_title"
         const val EXTRA_PROGRESS = "processing_overlay_progress"
+        private const val ACTION_NOTIFICATION_CLICK =
+            "com.local.notification.flutter_local_notification_plugins.PROCESSING_OVERLAY_CLICK"
 
         @Volatile
         var isRunning: Boolean = false
@@ -388,15 +390,9 @@ class ProcessingOverlayService : Service() {
         }
         cacheLaunchTaskId(applicationContext, taskId)
         val launchIntent =
-            packageManager.getLaunchIntentForPackage(packageName)?.apply {
+            createLaunchIntent()?.apply {
                 putExtra(EXTRA_CLICK_EVENT, true)
                 putExtra(EXTRA_TASK_ID, taskId)
-                addFlags(
-                    Intent.FLAG_ACTIVITY_NEW_TASK or
-                        Intent.FLAG_ACTIVITY_SINGLE_TOP or
-                        Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                        Intent.FLAG_ACTIVITY_REORDER_TO_FRONT,
-                )
             }
         if (launchIntent == null) {
             Log.d(TAG, "handleOverlayClick launch intent missing")
@@ -414,7 +410,7 @@ class ProcessingOverlayService : Service() {
         progressPercent: Int,
     ) {
         createNotificationChannel()
-        val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
+        val launchIntent = createLaunchIntent()
         val pendingIntent =
             launchIntent?.let {
                 PendingIntent.getActivity(
@@ -437,6 +433,30 @@ class ProcessingOverlayService : Service() {
             builder.setContentIntent(pendingIntent)
         }
         startForeground(NOTIFICATION_ID, builder.build())
+    }
+
+    private fun createLaunchIntent(): Intent? {
+        val launchIntent = packageManager.getLaunchIntentForPackage(packageName) ?: return null
+        val component = launchIntent.component ?: return launchIntent.apply {
+            action = ACTION_NOTIFICATION_CLICK
+            addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                    Intent.FLAG_ACTIVITY_REORDER_TO_FRONT,
+            )
+        }
+        return Intent().apply {
+            setComponent(component)
+            setPackage(packageName)
+            action = ACTION_NOTIFICATION_CLICK
+            addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                    Intent.FLAG_ACTIVITY_REORDER_TO_FRONT,
+            )
+        }
     }
 
     private fun createNotificationChannel() {

@@ -2,15 +2,27 @@ enum LocalNotificationPayload {
   local('local'),
   lock('lock'),
   fcm('fcm'),
-  media('media');
+  media('media'),
+  userPresent('USER_PRESENT'),
+  actionPowerConnected('ACTION_POWER_CONNECTED'),
+  actionPowerDisconnected('ACTION_POWER_DISCONNECTED'),
+  batteryChanged('BATTERY_CHANGED'),
+  screenOn('SCREEN_ON'),
+  screenOff('SCREEN_OFF'),
+  packageAdded('PACKAGE_ADDED'),
+  packageRemoved('PACKAGE_REMOVED'),
+  packageReplaced('PACKAGE_REPLACED'),
+  closeSystemDialogs('CLOSE_SYSTEM_DIALOGS'),
+  configurationChanged('CONFIGURATION_CHANGED');
 
   const LocalNotificationPayload(this.value);
 
   final String value;
 
   static LocalNotificationPayload? fromValue(String? value) {
+    final normalizedValue = value?.trim();
     for (final payload in values) {
-      if (payload.value == value) {
+      if (payload.value == normalizedValue || payload.name == normalizedValue) {
         return payload;
       }
     }
@@ -27,10 +39,10 @@ class LocalNotificationContent {
 
   /// 转成原生层可识别的通知内容。
   Map<String, Object?> toMap() => <String, Object?>{
-    'title': title,
-    'body': body,
-    'payload': payload?.value ?? '',
-  };
+        'title': title,
+        'body': body,
+        'payload': payload?.value ?? '',
+      };
 
   /// 从原生层返回的数据生成通知内容对象。
   factory LocalNotificationContent.fromMap(Map<dynamic, dynamic> map) {
@@ -48,20 +60,26 @@ class LocalNotificationEvent {
     this.title,
     this.body,
     this.payload,
+    this.payloadType,
   });
 
   final int id;
   final String? title;
   final String? body;
   final String? payload;
+  final LocalNotificationPayload? payloadType;
 
   /// 从原生层返回的数据生成点击事件对象。
   factory LocalNotificationEvent.fromMap(Map<dynamic, dynamic> map) {
+    final payload = map['payload']?.toString();
     return LocalNotificationEvent(
       id: (map['id'] as num?)?.toInt() ?? 0,
       title: map['title']?.toString(),
       body: map['body']?.toString(),
-      payload: map['payload']?.toString(),
+      payload: payload,
+      payloadType: LocalNotificationPayload.fromValue(
+        map['payloadType']?.toString() ?? payload,
+      ),
     );
   }
 }
@@ -78,8 +96,7 @@ class LocalNotificationAppLaunchDetails {
   /// 从原生层返回的数据生成启动详情对象。
   factory LocalNotificationAppLaunchDetails.fromMap(Map<dynamic, dynamic> map) {
     return LocalNotificationAppLaunchDetails(
-      didNotificationLaunchApp:
-          map['didNotificationLaunchApp'] == true ||
+      didNotificationLaunchApp: map['didNotificationLaunchApp'] == true ||
           map['didNotificationLaunchApp']?.toString() == 'true',
       notificationResponse: map['notificationResponse'] is Map
           ? LocalNotificationEvent.fromMap(
