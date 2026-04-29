@@ -24,6 +24,7 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
+import com.bumptech.glide.Glide
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -35,8 +36,8 @@ class ProcessingOverlayService : Service() {
         private const val KEY_TITLE = "processing_overlay_title"
         private const val KEY_PROGRESS = "processing_overlay_progress"
         private const val KEY_LAUNCH_TASK_ID = "processing_overlay_launch_task_id"
-        private const val NOTIFICATION_CHANNEL_ID = "pdf_flow_processing_overlay_channel"
-        private const val NOTIFICATION_CHANNEL_NAME = "PDF Flow Processing Overlay"
+        private const val NOTIFICATION_CHANNEL_ID = "pdf_flow_processing_overlay_channel_v3"
+        private const val NOTIFICATION_CHANNEL_NAME = "PDF Flow"
         private const val NOTIFICATION_ID = 10006
 
         const val ACTION_SHOW = "processing_overlay_action_show"
@@ -151,10 +152,7 @@ class ProcessingOverlayService : Service() {
     override fun onCreate() {
         super.onCreate()
         windowManager = getSystemService(WINDOW_SERVICE) as? WindowManager
-        ensureForegroundNotification(
-            title = getStringResource(R.string.fln_processing_overlay_default_title),
-            progressPercent = 0,
-        )
+        ensureForegroundNotification()
     }
 
     override fun onStartCommand(
@@ -182,10 +180,7 @@ class ProcessingOverlayService : Service() {
         currentTaskId = state.taskId
         ensureOverlayView()
         updateOverlayView(state)
-        ensureForegroundNotification(
-            title = state.title,
-            progressPercent = state.progressPercent,
-        )
+        ensureForegroundNotification()
         isRunning = true
         return START_STICKY
     }
@@ -267,13 +262,29 @@ class ProcessingOverlayService : Service() {
 
     private fun bindAppLogo() {
         val targetView = logoView ?: return
+        val launcherIconResId = resources.getIdentifier("ic_launcher", "mipmap", packageName)
         try {
-            targetView.setImageDrawable(packageManager.getApplicationIcon(packageName))
+            Glide
+                .with(applicationContext)
+                .asBitmap()
+                .load(
+                    if (launcherIconResId != 0) {
+                        launcherIconResId
+                    } else {
+                        packageManager.getApplicationIcon(packageName)
+                    },
+                )
+                .circleCrop()
+                .into(targetView)
         } catch (e: Exception) {
             Log.d(TAG, "bindAppLogo failed error=${e.message}")
-            targetView.setImageResource(resolveSmallIcon())
+            Glide
+                .with(applicationContext)
+                .asBitmap()
+                .load(resolveSmallIcon())
+                .circleCrop()
+                .into(targetView)
         }
-        targetView.clipToOutline = true
     }
 
     private fun attachOverlayInteractions(
@@ -405,10 +416,7 @@ class ProcessingOverlayService : Service() {
         }
     }
 
-    private fun ensureForegroundNotification(
-        title: String,
-        progressPercent: Int,
-    ) {
+    private fun ensureForegroundNotification() {
         createNotificationChannel()
         val launchIntent = createLaunchIntent()
         val pendingIntent =
@@ -423,10 +431,12 @@ class ProcessingOverlayService : Service() {
         val builder =
             NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
                 .setSmallIcon(resolveSmallIcon())
-                .setContentTitle(title.ifBlank { getStringResource(R.string.fln_processing_overlay_default_title) })
-                .setContentText("$progressPercent%")
+                .setContentTitle(getStringResource(R.string.fln_processing_overlay_running_title))
                 .setOnlyAlertOnce(true)
                 .setOngoing(true)
+                .setSilent(true)
+                .setLocalOnly(true)
+                .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
                 .setPriority(NotificationCompat.PRIORITY_LOW)
                 .setCategory(NotificationCompat.CATEGORY_SERVICE)
         if (pendingIntent != null) {

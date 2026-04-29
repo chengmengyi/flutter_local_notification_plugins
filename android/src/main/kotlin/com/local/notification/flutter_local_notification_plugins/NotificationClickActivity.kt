@@ -47,6 +47,7 @@ class NotificationClickActivity : Activity() {
 
     private fun startMainActivity() {
         val launchIntent = packageManager.getLaunchIntentForPackage(packageName) ?: return
+        launchIntent.putExtra(EXTRA_FROM_NOTIFICATION_CLICK, true)
         launchIntent.addFlags(
             Intent.FLAG_ACTIVITY_CLEAR_TOP or
                 Intent.FLAG_ACTIVITY_SINGLE_TOP or
@@ -61,5 +62,6 @@ class NotificationClickActivity : Activity() {
         const val EXTRA_BODY = "body"
         const val EXTRA_PAYLOAD = "payload"
         const val EXTRA_PAYLOAD_TYPE = "payloadType"
+        private const val EXTRA_FROM_NOTIFICATION_CLICK = "b03pdf.extra.FROM_NOTIFICATION_CLICK"
     }
 }

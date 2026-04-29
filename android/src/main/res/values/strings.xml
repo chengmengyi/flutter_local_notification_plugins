@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="fln_processing_overlay_default_title">AI Processing...</string>
+    <string name="fln_processing_overlay_running_title">App is running</string>
     <string name="fln_processing_overlay_channel_desc">Shows the processing overlay while PDF tasks run in background.</string>
 </resources>

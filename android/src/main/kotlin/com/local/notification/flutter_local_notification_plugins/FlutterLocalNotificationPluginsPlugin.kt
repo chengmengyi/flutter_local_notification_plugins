@@ -82,6 +82,7 @@ class FlutterLocalNotificationPluginsPlugin :
         private const val EXTRA_REPEAT_INTERVAL = "repeatIntervalMilliseconds"
         private const val EXTRA_CLICK_EVENT = "flutter_local_notification_click_event"
         private const val EXTRA_MEDIA_ACTION = "flutter_local_notification_media_action"
+        private const val EXTRA_FROM_NOTIFICATION_CLICK = "b03pdf.extra.FROM_NOTIFICATION_CLICK"
         private const val ACTION_NOTIFICATION_CLICK =
             "com.local.notification.flutter_local_notification_plugins.NOTIFICATION_CLICK"
         private const val EXTRA_PRIORITY = "priority"
@@ -240,10 +241,17 @@ class FlutterLocalNotificationPluginsPlugin :
         }
 
         private fun createNotificationClickIntent(context: Context): Intent {
-            return Intent(context, NotificationClickActivity::class.java).apply {
+            val launchIntent =
+                context.packageManager.getLaunchIntentForPackage(context.packageName)
+                    ?: Intent(context, NotificationClickActivity::class.java)
+            return launchIntent.apply {
                 action = ACTION_NOTIFICATION_CLICK
+                putExtra(EXTRA_FROM_NOTIFICATION_CLICK, true)
                 addFlags(
                     Intent.FLAG_ACTIVITY_NEW_TASK or
+                        Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                        Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                        Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or
                         Intent.FLAG_ACTIVITY_NO_ANIMATION,
                 )
             }
