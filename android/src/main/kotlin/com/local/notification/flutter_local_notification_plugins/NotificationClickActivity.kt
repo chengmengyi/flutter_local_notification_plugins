@@ -20,6 +20,10 @@ class NotificationClickActivity : Activity() {
 
     private fun handleClick(intent: Intent?) {
         intent ?: return
+        FlutterLocalNotificationPluginsPlugin.cancelClickedNotification(
+            applicationContext,
+            intent,
+        )
         val arguments =
             mapOf(
                 "id" to intent.getIntExtra(EXTRA_ID, 0),
@@ -62,6 +66,8 @@ class NotificationClickActivity : Activity() {
         const val EXTRA_BODY = "body"
         const val EXTRA_PAYLOAD = "payload"
         const val EXTRA_PAYLOAD_TYPE = "payloadType"
+        const val EXTRA_NOTIFICATION_DISPLAY_ID = "notificationDisplayId"
+        const val EXTRA_NOTIFICATION_DISPLAY_TAG = "notificationDisplayTag"
         private const val EXTRA_FROM_NOTIFICATION_CLICK = "b03pdf.extra.FROM_NOTIFICATION_CLICK"
     }
 }

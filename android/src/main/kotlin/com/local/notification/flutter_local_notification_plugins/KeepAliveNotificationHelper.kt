@@ -322,6 +322,7 @@ object KeepAliveNotificationHelper {
             } else {
                 RemoteViews(context.packageName, defaultLayoutResId)
             }
+        bindShortcutIcon(context, views, "fln_shortcut_logo_icon", "logo")
         bindShortcutText(context, views, "fln_shortcut_home_text", config.homeText)
         bindShortcutText(context, views, "fln_shortcut_merge_text", config.mergeText)
         bindShortcutText(context, views, "fln_shortcut_import_text", config.importText)

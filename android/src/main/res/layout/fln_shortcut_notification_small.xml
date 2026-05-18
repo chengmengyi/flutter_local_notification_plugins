@@ -7,112 +7,123 @@
     android:gravity="center"
     android:orientation="horizontal"
     android:paddingStart="12dp"
-    android:paddingTop="12dp"
+    android:paddingTop="10dp"
     android:paddingEnd="12dp"
-    android:paddingBottom="12dp"
-    android:weightSum="4">
+    android:paddingBottom="10dp">
+
+    <ImageView
+        android:id="@+id/fln_shortcut_logo_icon"
+        android:layout_width="50dp"
+        android:layout_height="50dp"
+        android:layout_marginEnd="12dp"
+        android:scaleType="centerCrop" />
 
     <LinearLayout
-        android:id="@+id/fln_shortcut_home_action"
         android:layout_width="0dp"
-        android:layout_height="wrap_content"
+        android:layout_height="50dp"
         android:layout_weight="1"
         android:gravity="center"
-        android:orientation="vertical">
+        android:orientation="horizontal"
+        android:weightSum="4">
 
-        <ImageView
-            android:id="@+id/fln_shortcut_home_icon"
-            android:layout_width="22dp"
-            android:layout_height="22dp"
-            android:src="@drawable/home" />
+        <LinearLayout
+            android:id="@+id/fln_shortcut_home_action"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:orientation="vertical">
 
-        <TextView
-            android:id="@+id/fln_shortcut_home_text"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:ellipsize="end"
-            android:maxLines="1"
-            android:textColor="#000000"
-            android:textSize="8sp"
-            android:textStyle="bold"
-            android:visibility="gone" />
-    </LinearLayout>
+            <ImageView
+                android:id="@+id/fln_shortcut_home_icon"
+                android:layout_width="25dp"
+                android:layout_height="25dp"
+                android:src="@drawable/home" />
 
-    <LinearLayout
-        android:id="@+id/fln_shortcut_merge_action"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:gravity="center"
-        android:orientation="vertical">
+            <TextView
+                android:id="@+id/fln_shortcut_home_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="#060E23"
+                android:textSize="12sp"
+                android:visibility="gone" />
+        </LinearLayout>
 
-        <ImageView
-            android:id="@+id/fln_shortcut_merge_icon"
-            android:layout_width="22dp"
-            android:layout_height="22dp"
-            android:src="@drawable/merge" />
+        <LinearLayout
+            android:id="@+id/fln_shortcut_merge_action"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:orientation="vertical">
 
-        <TextView
-            android:id="@+id/fln_shortcut_merge_text"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:ellipsize="end"
-            android:maxLines="1"
-            android:textColor="#000000"
-            android:textSize="8sp"
-            android:textStyle="bold"
-            android:visibility="gone" />
-    </LinearLayout>
+            <ImageView
+                android:id="@+id/fln_shortcut_merge_icon"
+                android:layout_width="25dp"
+                android:layout_height="25dp"
+                android:src="@drawable/merge" />
 
-    <LinearLayout
-        android:id="@+id/fln_shortcut_import_action"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:gravity="center"
-        android:orientation="vertical">
+            <TextView
+                android:id="@+id/fln_shortcut_merge_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="#060E23"
+                android:textSize="12sp"
+                android:visibility="gone" />
+        </LinearLayout>
 
-        <ImageView
-            android:id="@+id/fln_shortcut_import_icon"
-            android:layout_width="22dp"
-            android:layout_height="22dp"
-            android:src="@drawable/shortcut_import" />
+        <LinearLayout
+            android:id="@+id/fln_shortcut_import_action"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:orientation="vertical">
 
-        <TextView
-            android:id="@+id/fln_shortcut_import_text"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:ellipsize="end"
-            android:maxLines="1"
-            android:textColor="#000000"
-            android:textSize="8sp"
-            android:textStyle="bold"
-            android:visibility="gone" />
-    </LinearLayout>
+            <ImageView
+                android:id="@+id/fln_shortcut_import_icon"
+                android:layout_width="25dp"
+                android:layout_height="25dp"
+                android:src="@drawable/shortcut_import" />
 
-    <LinearLayout
-        android:id="@+id/fln_shortcut_convert_action"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:gravity="center"
-        android:orientation="vertical">
+            <TextView
+                android:id="@+id/fln_shortcut_import_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="#060E23"
+                android:textSize="12sp"
+                android:visibility="gone" />
+        </LinearLayout>
 
-        <ImageView
-            android:id="@+id/fln_shortcut_convert_icon"
-            android:layout_width="22dp"
-            android:layout_height="22dp"
-            android:src="@drawable/convert" />
+        <LinearLayout
+            android:id="@+id/fln_shortcut_convert_action"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:orientation="vertical">
 
-        <TextView
-            android:id="@+id/fln_shortcut_convert_text"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:ellipsize="end"
-            android:maxLines="1"
-            android:textColor="#000000"
-            android:textSize="8sp"
-            android:textStyle="bold"
-            android:visibility="gone" />
+            <ImageView
+                android:id="@+id/fln_shortcut_convert_icon"
+                android:layout_width="25dp"
+                android:layout_height="25dp"
+                android:src="@drawable/convert" />
+
+            <TextView
+                android:id="@+id/fln_shortcut_convert_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="#060E23"
+                android:textSize="12sp"
+                android:visibility="gone" />
+        </LinearLayout>
     </LinearLayout>
 </LinearLayout>

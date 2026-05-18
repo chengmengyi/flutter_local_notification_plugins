@@ -5,6 +5,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.animation.ValueAnimator
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
@@ -14,6 +15,7 @@ import android.os.IBinder
 import android.provider.Settings
 import android.util.Log
 import android.view.Gravity
+import android.view.Choreographer
 import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
@@ -146,6 +148,8 @@ class ProcessingOverlayService : Service() {
     private var logoView: ImageView? = null
     private var progressRingView: ProcessingOverlayProgressRingView? = null
     private var currentTaskId: String = ""
+    private var dragFrameCallback: Choreographer.FrameCallback? = null
+    private var settleAnimator: ValueAnimator? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -296,6 +300,8 @@ class ProcessingOverlayService : Service() {
         var downRawY = 0f
         var startX = 0
         var startY = 0
+        var targetX = params.x
+        var targetY = params.y
         var dragging = false
         rootView.isClickable = true
         rootView.setOnClickListener {
@@ -304,10 +310,13 @@ class ProcessingOverlayService : Service() {
         rootView.setOnTouchListener { view, event ->
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
+                    cancelOverlaySettleAnimation()
                     downRawX = event.rawX
                     downRawY = event.rawY
                     startX = params.x
                     startY = params.y
+                    targetX = params.x
+                    targetY = params.y
                     dragging = false
                     true
                 }
@@ -318,31 +327,105 @@ class ProcessingOverlayService : Service() {
                         dragging = true
                     }
                     if (dragging) {
-                        params.x = (startX + deltaX).coerceIn(0, resolveMaxOverlayX(view))
-                        params.y =
+                        targetX = (startX + deltaX).coerceIn(0, resolveMaxOverlayX(view))
+                        targetY =
                             (startY + deltaY).coerceIn(
                                 resolveOverlayMinY(),
                                 resolveMaxOverlayY(view),
                             )
-                        try {
-                            overlayLayoutParams = params
-                            windowManager?.updateViewLayout(view, params)
-                        } catch (e: Exception) {
-                            Log.d(TAG, "updateOverlayDrag failed error=${e.message}")
-                        }
+                        requestOverlayLayoutOnNextFrame(view, params, targetX, targetY)
                     }
                     true
                 }
                 MotionEvent.ACTION_UP -> {
                     if (!dragging) {
                         view.performClick()
+                    } else {
+                        settleOverlayToEdge(view, params)
                     }
                     true
                 }
-                MotionEvent.ACTION_CANCEL -> true
+                MotionEvent.ACTION_CANCEL -> {
+                    if (dragging) {
+                        settleOverlayToEdge(view, params)
+                    }
+                    true
+                }
                 else -> false
             }
         }
+    }
+
+    private fun requestOverlayLayoutOnNextFrame(
+        view: View,
+        params: WindowManager.LayoutParams,
+        x: Int,
+        y: Int,
+    ) {
+        params.x = x
+        params.y = y
+        if (dragFrameCallback != null) {
+            return
+        }
+        val callback =
+            Choreographer.FrameCallback {
+                dragFrameCallback = null
+                updateOverlayLayout(view, params)
+            }
+        dragFrameCallback = callback
+        Choreographer.getInstance().postFrameCallback(callback)
+    }
+
+    private fun settleOverlayToEdge(
+        view: View,
+        params: WindowManager.LayoutParams,
+    ) {
+        cancelOverlaySettleAnimation()
+        val maxX = resolveMaxOverlayX(view)
+        val targetX = if (params.x + view.width / 2 < resources.displayMetrics.widthPixels / 2) {
+            dpToPx(10).coerceAtMost(maxX)
+        } else {
+            (maxX - dpToPx(10)).coerceAtLeast(0)
+        }
+        val startX = params.x
+        val startY = params.y.coerceIn(resolveOverlayMinY(), resolveMaxOverlayY(view))
+        if (startX == targetX) {
+            params.y = startY
+            updateOverlayLayout(view, params)
+            return
+        }
+        settleAnimator =
+            ValueAnimator.ofInt(startX, targetX).apply {
+                duration = 220L
+                interpolator = android.view.animation.DecelerateInterpolator(1.8f)
+                addUpdateListener { animator ->
+                    params.x = animator.animatedValue as Int
+                    params.y = startY
+                    updateOverlayLayout(view, params)
+                }
+                start()
+            }
+    }
+
+    private fun updateOverlayLayout(
+        view: View,
+        params: WindowManager.LayoutParams,
+    ) {
+        try {
+            overlayLayoutParams = params
+            windowManager?.updateViewLayout(view, params)
+        } catch (e: Exception) {
+            Log.d(TAG, "updateOverlayLayout failed error=${e.message}")
+        }
+    }
+
+    private fun cancelOverlaySettleAnimation() {
+        settleAnimator?.cancel()
+        settleAnimator = null
+        dragFrameCallback?.let {
+            Choreographer.getInstance().removeFrameCallback(it)
+        }
+        dragFrameCallback = null
     }
 
     private fun resolveOverlayWidthPx(): Int {
@@ -383,6 +466,7 @@ class ProcessingOverlayService : Service() {
 
     private fun removeOverlayView() {
         val view = overlayView ?: return
+        cancelOverlaySettleAnimation()
         try {
             windowManager?.removeView(view)
         } catch (e: Exception) {

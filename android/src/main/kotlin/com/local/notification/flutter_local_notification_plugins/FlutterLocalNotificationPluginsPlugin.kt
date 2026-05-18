@@ -81,6 +81,8 @@ class FlutterLocalNotificationPluginsPlugin :
         private const val EXTRA_NOTIFICATION_LIST = "notificationList"
         private const val EXTRA_REPEAT_INTERVAL = "repeatIntervalMilliseconds"
         private const val EXTRA_CLICK_EVENT = "flutter_local_notification_click_event"
+        const val EXTRA_NOTIFICATION_DISPLAY_ID = "notificationDisplayId"
+        const val EXTRA_NOTIFICATION_DISPLAY_TAG = "notificationDisplayTag"
         private const val EXTRA_MEDIA_ACTION = "flutter_local_notification_media_action"
         private const val EXTRA_FROM_NOTIFICATION_CLICK = "b03pdf.extra.FROM_NOTIFICATION_CLICK"
         private const val ACTION_NOTIFICATION_CLICK =
@@ -257,6 +259,23 @@ class FlutterLocalNotificationPluginsPlugin :
             }
         }
 
+        fun cancelClickedNotification(
+            context: Context,
+            intent: Intent?,
+        ) {
+            intent ?: return
+            val displayId = intent.getIntExtra(EXTRA_NOTIFICATION_DISPLAY_ID, -1)
+            if (displayId < 0) {
+                return
+            }
+            val displayTag = intent.getStringExtra(EXTRA_NOTIFICATION_DISPLAY_TAG)
+            if (displayTag.isNullOrBlank()) {
+                NotificationManagerCompat.from(context).cancel(displayId)
+                return
+            }
+            NotificationManagerCompat.from(context).cancel(displayTag, displayId)
+        }
+
         private fun resolveActionPayload(action: String?): String {
             return when (action) {
                 Intent.ACTION_USER_PRESENT -> "USER_PRESENT"
@@ -377,10 +396,26 @@ class FlutterLocalNotificationPluginsPlugin :
                     channelDescription = channelDescription,
                     importance = importance,
                 )
+                val notificationManager = NotificationManagerCompat.from(context)
+                val useUniqueMediaNotification = replaceExistingMedia && payload == "media"
+                val notificationDisplayTag =
+                    if (useUniqueMediaNotification) {
+                        MEDIA_UNIQUE_TAG
+                    } else {
+                        "local_notification_${baseId}_${System.currentTimeMillis()}_${Random.nextInt(100000)}"
+                    }
+                val notificationDisplayId =
+                    if (useUniqueMediaNotification) {
+                        MEDIA_UNIQUE_NOTIFICATION_ID
+                    } else {
+                        id
+                    }
                 val effectiveClickPayload = clickPayload?.takeUnless { it.isBlank() } ?: payload
                 val clickIntent =
                     createNotificationClickIntent(context).apply {
                         putExtra(EXTRA_CLICK_EVENT, true)
+                        putExtra(EXTRA_NOTIFICATION_DISPLAY_ID, notificationDisplayId)
+                        putExtra(EXTRA_NOTIFICATION_DISPLAY_TAG, notificationDisplayTag)
                         putExtra(EXTRA_ID, baseId)
                         putExtra(EXTRA_TITLE, title)
                         putExtra(EXTRA_BODY, body)
@@ -452,19 +487,17 @@ class FlutterLocalNotificationPluginsPlugin :
                         beautyTemplate.copy(beautyTitle = displayTitle ?: beautyTemplate.beautyTitle),
                     )
                 }
-                val notificationManager = NotificationManagerCompat.from(context)
-                if (replaceExistingMedia && payload == "media") {
+                if (useUniqueMediaNotification) {
                     cancelTrackedMediaNotifications(context, notificationManager)
                     notificationManager.notify(
-                        MEDIA_UNIQUE_TAG,
-                        MEDIA_UNIQUE_NOTIFICATION_ID,
+                        notificationDisplayTag,
+                        notificationDisplayId,
                         builder.build(),
                     )
                 } else {
-                    val displayTag = "local_notification_${baseId}_${System.currentTimeMillis()}_${Random.nextInt(100000)}"
-                    notificationManager.notify(displayTag, id, builder.build())
+                    notificationManager.notify(notificationDisplayTag, notificationDisplayId, builder.build())
                     if (payload == "media") {
-                        trackMediaNotification(context, displayTag, id)
+                        trackMediaNotification(context, notificationDisplayTag, notificationDisplayId)
                     }
                 }
                 dispatchNotificationDisplayed(
@@ -1743,6 +1776,7 @@ class FlutterLocalNotificationPluginsPlugin :
         if (intent?.getBooleanExtra(EXTRA_CLICK_EVENT, false) != true) {
             return false
         }
+        cancelClickedNotification(applicationContext, intent)
         val arguments =
             mapOf(
                 "id" to intent.getIntExtra(EXTRA_ID, 0),
