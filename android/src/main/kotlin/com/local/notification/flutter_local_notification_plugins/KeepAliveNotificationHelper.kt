@@ -672,6 +672,10 @@ object KeepAliveNotificationHelper {
                     "payload" to payload,
                 ),
             )
+            FlutterLocalNotificationPluginsPlugin.showLocalTriggeredMediaNotification(
+                context = context,
+                reason = "work_manager_$source",
+            )
             wakeScreenIfNeeded(context)
             Log.d(TAG, "showStoredLocalNotification success source=$source title=$title")
             return true

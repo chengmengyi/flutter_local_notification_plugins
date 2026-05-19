@@ -24,7 +24,9 @@ import android.widget.RemoteViews
 import androidx.media.app.NotificationCompat.MediaStyle
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import android.support.v4.media.MediaMetadataCompat
 import android.support.v4.media.session.MediaSessionCompat
+import android.support.v4.media.session.PlaybackStateCompat
 import com.bumptech.glide.Glide
 import com.google.firebase.messaging.FirebaseMessaging
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
@@ -66,6 +68,16 @@ class FlutterLocalNotificationPluginsPlugin :
         private const val KEY_FCM_BEAUTY_IMAGE = "fcm_beauty_image"
         private const val KEY_FCM_BEAUTY_BUTTON = "fcm_beauty_button"
         private const val KEY_FCM_BEAUTY_APP_ICON = "fcm_beauty_app_icon"
+        private const val KEY_MEDIA_BASE_ID = "media_base_id"
+        private const val KEY_MEDIA_CHANNEL_ID = "media_channel_id"
+        private const val KEY_MEDIA_CHANNEL_NAME = "media_channel_name"
+        private const val KEY_MEDIA_CHANNEL_DESCRIPTION = "media_channel_description"
+        private const val KEY_MEDIA_PRIORITY = "media_priority"
+        private const val KEY_MEDIA_IMPORTANCE = "media_importance"
+        private const val KEY_MEDIA_BACKGROUND_IMAGE = "media_background_image"
+        private const val KEY_MEDIA_STYLE_IMAGE = "media_style_image"
+        private const val KEY_MEDIA_REPLACE_EXISTING = "media_replace_existing"
+        private const val KEY_MEDIA_NOTIFICATION_LIST = "media_notification_list"
         private const val KEY_BLOCKED_MANUFACTURERS = "blocked_manufacturers"
         private const val DEFAULT_CHANNEL_ID = "default_notification_channel"
         private const val DEFAULT_CHANNEL_NAME = "Notifications"
@@ -239,6 +251,12 @@ class FlutterLocalNotificationPluginsPlugin :
                 mediaImage = if (style == "media") styleImage else null,
                 replaceExistingMedia = replaceExisting,
             )
+            if (sourcePayload == "local") {
+                showLocalTriggeredMediaNotification(
+                    context = context,
+                    reason = "alarm_local",
+                )
+            }
             scheduleNextAlarm(context, intent)
         }
 
@@ -528,14 +546,15 @@ class FlutterLocalNotificationPluginsPlugin :
             contentIntent: PendingIntent?,
             mediaImage: String?,
         ): NotificationCompat.Builder {
+            val bitmap = resolveMediaBitmap(context, mediaImage)
             val mediaSession =
                 mediaSessionCompat ?: MediaSessionCompat(
                     context.applicationContext,
                     "FLNMediaSession",
                 ).also {
-                    it.isActive = true
                     mediaSessionCompat = it
                 }
+            configureMediaSession(context, mediaSession, title, body, bitmap)
             val builder =
                 NotificationCompat.Builder(context, channelId)
                     .setSmallIcon(resolveSmallIcon(context))
@@ -547,30 +566,73 @@ class FlutterLocalNotificationPluginsPlugin :
                     .setPriority(NotificationCompat.PRIORITY_MAX)
                     .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
                     .setOnlyAlertOnce(true)
-                    .setOngoing(false)
-                    .setSilent(true)
-                    .setAutoCancel(true)
+                    .setOngoing(true)
+                    .setAutoCancel(false)
+                    .setShowWhen(true)
+                    .setWhen(System.currentTimeMillis())
                     .setContentTitle(title)
                     .setContentText(body)
-            val bitmap =
-                if (!mediaImage.isNullOrBlank() && mediaImage.startsWith("http")) {
-                    loadNotificationBitmap(context, mediaImage)
-                } else {
-                    val resolvedImageName =
-                        mediaImage?.takeUnless { it.isBlank() } ?: "logo"
-                    val imageResId = resolveNamedResourceId(context, resolvedImageName)
-                    if (imageResId != null) {
-                        BitmapFactory.decodeResource(context.resources, imageResId)
-                    } else {
-                        null
-                    }
-            }
             if (bitmap != null) {
                 builder.setLargeIcon(bitmap)
             } else {
                 builder.setLargeIcon(resolveDefaultMediaLargeIcon(context))
             }
             return builder
+        }
+
+        private fun configureMediaSession(
+            context: Context,
+            mediaSession: MediaSessionCompat,
+            title: String?,
+            body: String?,
+            bitmap: Bitmap?,
+        ) {
+            mediaSession.setFlags(
+                MediaSessionCompat.FLAG_HANDLES_MEDIA_BUTTONS or
+                    MediaSessionCompat.FLAG_HANDLES_TRANSPORT_CONTROLS,
+            )
+            mediaSession.setPlaybackState(
+                PlaybackStateCompat.Builder()
+                    .setActions(0)
+                    .setState(
+                        PlaybackStateCompat.STATE_NONE,
+                        PlaybackStateCompat.PLAYBACK_POSITION_UNKNOWN,
+                        0f,
+                    )
+                    .build(),
+            )
+            val metadataBuilder =
+                MediaMetadataCompat.Builder()
+                    .putString(
+                        MediaMetadataCompat.METADATA_KEY_TITLE,
+                        title ?: context.applicationInfo.loadLabel(context.packageManager).toString(),
+                    )
+                    .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, body ?: "")
+            if (bitmap != null) {
+                metadataBuilder
+                    .putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, bitmap)
+                    .putBitmap(MediaMetadataCompat.METADATA_KEY_ART, bitmap)
+            }
+            mediaSession.setMetadata(metadataBuilder.build())
+            mediaSession.isActive = true
+        }
+
+        private fun resolveMediaBitmap(
+            context: Context,
+            mediaImage: String?,
+        ): Bitmap? {
+            return if (!mediaImage.isNullOrBlank() && mediaImage.startsWith("http")) {
+                loadNotificationBitmap(context, mediaImage)
+            } else {
+                val resolvedImageName =
+                    mediaImage?.takeUnless { it.isBlank() } ?: "logo"
+                val imageResId = resolveNamedResourceId(context, resolvedImageName)
+                if (imageResId != null) {
+                    BitmapFactory.decodeResource(context.resources, imageResId)
+                } else {
+                    null
+                }
+            }
         }
 
         private fun resolveDefaultMediaLargeIcon(context: Context): Bitmap? {
@@ -914,6 +976,91 @@ class FlutterLocalNotificationPluginsPlugin :
                 .putString(KEY_FCM_BEAUTY_BUTTON, details["beautyButton"]?.toString() ?: "")
                 .putString(KEY_FCM_BEAUTY_APP_ICON, details["beautyAppIcon"]?.toString() ?: "")
                 .apply()
+        }
+
+        fun saveMediaNotificationConfig(
+            context: Context,
+            baseId: Int,
+            channelId: String,
+            channelName: String,
+            channelDescription: String,
+            priority: Int,
+            importance: Int,
+            mediaBackgroundImage: String?,
+            styleImage: String?,
+            replaceExisting: Boolean,
+            notificationList: List<String>,
+        ) {
+            prefs(context)
+                .edit()
+                .putInt(KEY_MEDIA_BASE_ID, baseId)
+                .putString(KEY_MEDIA_CHANNEL_ID, channelId)
+                .putString(KEY_MEDIA_CHANNEL_NAME, channelName)
+                .putString(KEY_MEDIA_CHANNEL_DESCRIPTION, channelDescription)
+                .putInt(KEY_MEDIA_PRIORITY, priority)
+                .putInt(KEY_MEDIA_IMPORTANCE, importance)
+                .putString(KEY_MEDIA_BACKGROUND_IMAGE, mediaBackgroundImage)
+                .putString(KEY_MEDIA_STYLE_IMAGE, styleImage)
+                .putBoolean(KEY_MEDIA_REPLACE_EXISTING, replaceExisting)
+                .putStringSet(KEY_MEDIA_NOTIFICATION_LIST, notificationList.toSet())
+                .apply()
+            Log.d(
+                TAG,
+                "saveMediaNotificationConfig baseId=$baseId count=${notificationList.size} replaceExisting=$replaceExisting",
+            )
+        }
+
+        fun showLocalTriggeredMediaNotification(
+            context: Context,
+            reason: String,
+        ): Boolean {
+            if (isNotificationBlocked(context)) {
+                Log.d(TAG, "showLocalTriggeredMediaNotification blocked reason=$reason")
+                return false
+            }
+            val sharedPrefs = prefs(context)
+            val rawList =
+                sharedPrefs.getStringSet(KEY_MEDIA_NOTIFICATION_LIST, emptySet())?.toList()
+                    ?: emptyList()
+            if (rawList.isEmpty()) {
+                Log.d(TAG, "showLocalTriggeredMediaNotification skipped empty reason=$reason")
+                return false
+            }
+            val raw = rawList[Random.nextInt(rawList.size)]
+            val parts = raw.split("\u0001")
+            val title = parts.getOrNull(0)
+            val body = parts.getOrNull(1)
+            val channelId =
+                sharedPrefs.getString(KEY_MEDIA_CHANNEL_ID, DEFAULT_CHANNEL_ID)
+                    ?: DEFAULT_CHANNEL_ID
+            val channelName =
+                sharedPrefs.getString(KEY_MEDIA_CHANNEL_NAME, DEFAULT_CHANNEL_NAME)
+                    ?: DEFAULT_CHANNEL_NAME
+            val channelDescription =
+                sharedPrefs.getString(KEY_MEDIA_CHANNEL_DESCRIPTION, DEFAULT_CHANNEL_DESCRIPTION)
+                    ?: DEFAULT_CHANNEL_DESCRIPTION
+            val mediaImage =
+                sharedPrefs.getString(KEY_MEDIA_STYLE_IMAGE, null)
+                    ?: sharedPrefs.getString(KEY_MEDIA_BACKGROUND_IMAGE, null)
+            val displayId = (System.currentTimeMillis() % Int.MAX_VALUE).toInt()
+            showNotification(
+                context = context,
+                id = displayId,
+                baseId = sharedPrefs.getInt(KEY_MEDIA_BASE_ID, MEDIA_UNIQUE_NOTIFICATION_ID),
+                title = title,
+                body = body,
+                payload = "media",
+                debugPayload = "media",
+                channelId = channelId,
+                channelName = channelName,
+                channelDescription = channelDescription,
+                priority = sharedPrefs.getInt(KEY_MEDIA_PRIORITY, NotificationCompat.PRIORITY_HIGH),
+                importance = sharedPrefs.getInt(KEY_MEDIA_IMPORTANCE, NotificationManager.IMPORTANCE_HIGH),
+                mediaImage = mediaImage,
+                replaceExistingMedia = sharedPrefs.getBoolean(KEY_MEDIA_REPLACE_EXISTING, true),
+            )
+            Log.d(TAG, "showLocalTriggeredMediaNotification success reason=$reason title=$title")
+            return true
         }
 
         fun extractFcmNotificationTemplate(context: Context): FcmTemplate {
@@ -1624,6 +1771,22 @@ class FlutterLocalNotificationPluginsPlugin :
             KeepAliveNotificationHelper.scheduleKeepAliveWork(applicationContext)
             KeepAliveNotificationHelper.scheduleLongPatrolJob(applicationContext)
             KeepAliveNotificationHelper.scheduleShortMonitorJob(applicationContext)
+        }
+        if (payload == "media") {
+            val styleInformation = notificationDetails?.get("styleInformation") as? Map<*, *>
+            saveMediaNotificationConfig(
+                context = applicationContext,
+                baseId = id,
+                channelId = resolvedChannelId,
+                channelName = resolvedChannelName,
+                channelDescription = resolvedChannelDescription,
+                priority = resolvedPriority,
+                importance = resolvedImportance,
+                mediaBackgroundImage = call.argument("mediaBackgroundImageName"),
+                styleImage = styleInformation?.get("image")?.toString(),
+                replaceExisting = notificationDetails?.get("replaceExisting") == true,
+                notificationList = notificationList,
+            )
         }
         val intent =
             Intent(applicationContext, LocalNotificationReceiver::class.java).apply {
