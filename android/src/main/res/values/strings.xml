@@ -3,4 +3,6 @@
     <string name="fln_processing_overlay_default_title">AI Processing...</string>
     <string name="fln_processing_overlay_running_title">App is running</string>
     <string name="fln_processing_overlay_channel_desc">Shows the processing overlay while PDF tasks run in background.</string>
+    <string name="fln_overlay_permission_guide_title">Almost there! Unlock your full potential</string>
+    <string name="fln_overlay_permission_guide_description">Find %1$s below and toggle the switch to ON.</string>
 </resources>

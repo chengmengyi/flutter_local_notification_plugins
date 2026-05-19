@@ -47,8 +47,10 @@ class OverlayPermissionGuideActivity : Activity() {
             findViewById<ImageView>(R.id.icon_logo)?.setImageDrawable(
                 packageManager.getApplicationIcon(appInfo),
             )
-            findViewById<TextView>(R.id.app_name_text)?.text =
-                packageManager.getApplicationLabel(appInfo)
+            val appName = packageManager.getApplicationLabel(appInfo)
+            findViewById<TextView>(R.id.app_name_text)?.text = appName
+            findViewById<TextView>(R.id.guide_description_text)?.text =
+                getString(R.string.fln_overlay_permission_guide_description, appName)
         } catch (e: Exception) {
             Log.d("LocalNotificationPlugin", "bindAppInfo failed error=${e.message}")
         }

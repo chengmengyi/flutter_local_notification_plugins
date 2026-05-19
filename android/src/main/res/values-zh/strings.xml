@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="fln_processing_overlay_running_title">应用正在运行中</string>
+    <string name="fln_overlay_permission_guide_title">快完成了！解锁完整体验</string>
+    <string name="fln_overlay_permission_guide_description">在下方找到 %1$s，并将开关切换为开启。</string>
 </resources>

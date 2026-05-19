@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="fln_processing_overlay_running_title">التطبيق قيد التشغيل</string>
+    <string name="fln_overlay_permission_guide_title">كدت تصل! افتح التجربة الكاملة</string>
+    <string name="fln_overlay_permission_guide_description">ابحث عن %1$s أدناه وبدّل المفتاح إلى تشغيل.</string>
 </resources>

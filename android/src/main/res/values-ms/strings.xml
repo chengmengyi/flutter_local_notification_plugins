@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="fln_processing_overlay_running_title">Aplikasi sedang berjalan</string>
+    <string name="fln_overlay_permission_guide_title">Hampir siap! Buka potensi penuh anda</string>
+    <string name="fln_overlay_permission_guide_description">Cari %1$s di bawah dan hidupkan suis.</string>
 </resources>

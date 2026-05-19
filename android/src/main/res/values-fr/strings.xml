@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="fln_processing_overlay_running_title">Application en cours</string>
+    <string name="fln_overlay_permission_guide_title">Presque terminé ! Débloquez tout le potentiel</string>
+    <string name="fln_overlay_permission_guide_description">Trouvez %1$s ci-dessous et activez l’interrupteur.</string>
 </resources>

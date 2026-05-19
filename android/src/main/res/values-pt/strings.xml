@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="fln_processing_overlay_running_title">O app está em execução</string>
+    <string name="fln_overlay_permission_guide_title">Quase lá! Desbloqueie todo o potencial</string>
+    <string name="fln_overlay_permission_guide_description">Encontre %1$s abaixo e ative o interruptor.</string>
 </resources>

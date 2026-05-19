@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="fln_processing_overlay_running_title">App wird ausgeführt</string>
+    <string name="fln_overlay_permission_guide_title">Fast geschafft! Schalte das volle Potenzial frei</string>
+    <string name="fln_overlay_permission_guide_description">Suche unten nach %1$s und stelle den Schalter auf EIN.</string>
 </resources>

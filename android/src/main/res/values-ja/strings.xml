@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="fln_processing_overlay_running_title">アプリが実行中です</string>
+    <string name="fln_overlay_permission_guide_title">あと少しです！すべての機能を有効にしましょう</string>
+    <string name="fln_overlay_permission_guide_description">下から %1$s を見つけて、スイッチをオンにしてください。</string>
 </resources>

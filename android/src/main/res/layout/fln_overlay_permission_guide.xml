@@ -24,17 +24,19 @@
             android:orientation="vertical">
 
             <TextView
+                android:id="@+id/guide_title_text"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Almost there! Unlock your full potential"
+                android:text="@string/fln_overlay_permission_guide_title"
                 android:textColor="#000000"
                 android:textSize="12sp"
                 android:textStyle="bold" />
 
             <TextView
+                android:id="@+id/guide_description_text"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Find PDF Flow below and toggle the switch to ON."
+                android:text="@string/fln_overlay_permission_guide_description"
                 android:textColor="#8D8D8D"
                 android:textSize="12sp" />
         </LinearLayout>
