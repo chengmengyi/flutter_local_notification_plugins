@@ -9,8 +9,8 @@
                 android:topRightRadius="0dp" />
             <gradient
                 android:angle="0"
-                android:endColor="#33B22D2D"
-                android:startColor="#33FFB45C" />
+                android:endColor="#66000000"
+                android:startColor="#1A000000" />
         </shape>
     </item>
     <item

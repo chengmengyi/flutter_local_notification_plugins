@@ -12,62 +12,69 @@
         android:layout_height="wrap_content"
         android:background="@drawable/fln_overlay_permission_guide_card_bg"
         android:elevation="10dp"
-        android:padding="10dp"
+        android:gravity="center_horizontal"
         android:orientation="vertical"
-        android:gravity="center_horizontal">
+        android:padding="10dp">
+
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
             android:layout_marginLeft="10dp"
-            android:layout_marginRight="10dp">
+            android:layout_marginRight="10dp"
+            android:orientation="vertical">
+
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="Almost there! Unlock your full potential"
-                android:textSize="12sp"
                 android:textColor="#000000"
-                android:textStyle="bold"/>
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="Find PDF Flow below and toggle the switch to ON."
-                android:textSize="12sp"
-                android:textColor="#8D8D8D"/>
+                android:textColor="#8D8D8D"
+                android:textSize="12sp" />
         </LinearLayout>
+
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
             android:layout_marginTop="10dp"
-            android:padding="10dp"
-            android:gravity="center_vertical">
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:padding="10dp">
+
             <ImageView
                 android:id="@+id/icon_logo"
                 android:layout_width="46dp"
                 android:layout_height="46dp"
-                android:scaleType="fitCenter"/>
+                android:scaleType="fitCenter" />
+
             <TextView
                 android:id="@+id/app_name_text"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:textStyle="bold"
                 android:layout_marginLeft="12dp"
                 android:layout_marginRight="12dp"
+                android:layout_weight="1"
                 android:text="PDF reader"
                 android:textColor="#000000"
-                />
+                android:textStyle="bold" />
+
             <ImageView
                 android:id="@+id/icon_switch"
                 android:layout_width="50dp"
                 android:layout_height="22dp"
-                android:src="@drawable/switch_close"/>
+                android:src="@drawable/switch_close" />
         </LinearLayout>
+
         <ImageView
             android:layout_width="14dp"
             android:layout_height="8dp"
-            android:src="@drawable/arrow_top"
-            android:layout_marginTop="12dp"/>
+            android:layout_marginTop="12dp"
+            android:src="@drawable/arrow_top" />
     </LinearLayout>
 </FrameLayout>
