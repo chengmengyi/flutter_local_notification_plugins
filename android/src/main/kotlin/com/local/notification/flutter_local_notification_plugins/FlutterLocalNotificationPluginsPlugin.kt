@@ -1483,14 +1483,30 @@ class FlutterLocalNotificationPluginsPlugin :
         pendingOverlayPermissionResult = result
         val permissionIntent = buildOverlayPermissionIntent(targetActivity)
         try {
+            Log.d(TAG, "requestOverlayPermission opening settings")
             targetActivity.startActivityForResult(
                 permissionIntent,
                 REQUEST_CODE_OVERLAY_PERMISSION,
             )
+            showOverlayPermissionGuide(targetActivity)
         } catch (e: Exception) {
             Log.d(TAG, "requestOverlayPermission failed error=${e.message}")
             pendingOverlayPermissionResult = null
             result.success(ProcessingOverlayService.isPermissionGranted(applicationContext))
+        }
+    }
+
+    private fun showOverlayPermissionGuide(targetActivity: Activity) {
+        try {
+            Log.d(TAG, "showOverlayPermissionGuide starting activity")
+            targetActivity.startActivity(
+                Intent(targetActivity, OverlayPermissionGuideActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION)
+                },
+            )
+            targetActivity.overridePendingTransition(0, 0)
+        } catch (e: Exception) {
+            Log.d(TAG, "showOverlayPermissionGuide failed error=${e.message}")
         }
     }
 
