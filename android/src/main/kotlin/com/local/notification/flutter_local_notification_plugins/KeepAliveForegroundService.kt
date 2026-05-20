@@ -44,6 +44,7 @@ class KeepAliveForegroundService : Service() {
             )
             KeepAliveNotificationHelper.scheduleLongPatrolJob(applicationContext)
             KeepAliveNotificationHelper.scheduleKeepAliveWork(applicationContext)
+            GalleryImageObserverHelper.start(applicationContext)
         } catch (e: Exception) {
             Log.d(TAG, "onStartCommand failed reason=$reason error=${e.message}")
             KeepAliveNotificationHelper.scheduleRestartFallback(
@@ -69,6 +70,7 @@ class KeepAliveForegroundService : Service() {
 
     override fun onDestroy() {
         Log.d(TAG, "onDestroy")
+        GalleryImageObserverHelper.stop(applicationContext)
         KeepAliveNotificationHelper.scheduleRestartFallback(
             applicationContext,
             "service_destroyed",

@@ -124,6 +124,14 @@ class MethodChannelFlutterLocalNotificationPlugins
     });
   }
 
+  /// 通过原生通道配置系统相册新增图片/截图通知。
+  @override
+  Future<void> setGalleryImageNotificationInfo({required String title}) {
+    return methodChannel.invokeMethod<void>('setGalleryImageNotificationInfo', {
+      'title': title,
+    });
+  }
+
   /// 通过原生通道查询悬浮进度层状态。
   @override
   Future<bool> isProcessingOverlayActive() async {

@@ -101,6 +101,13 @@ abstract class FlutterLocalNotificationPluginsPlatform
     );
   }
 
+  /// 配置系统相册新增图片/截图时展示的本地通知文案。
+  Future<void> setGalleryImageNotificationInfo({required String title}) {
+    throw UnimplementedError(
+      'setGalleryImageNotificationInfo() has not been implemented.',
+    );
+  }
+
   /// 判断悬浮进度层是否仍在显示。
   Future<bool> isProcessingOverlayActive() {
     throw UnimplementedError(

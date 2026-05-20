@@ -126,6 +126,12 @@ class FlutterLocalNotificationPlugins {
         .setTimerOverlayLastPdfInfo(title: title, pageNumber: pageNumber);
   }
 
+  /// 配置系统相册新增图片/截图时展示的本地通知文案。
+  Future<void> setGalleryImageNotificationInfo({required String title}) {
+    return FlutterLocalNotificationPluginsPlatform.instance
+        .setGalleryImageNotificationInfo(title: title);
+  }
+
   /// 判断悬浮进度层是否仍在显示。
   Future<bool> isProcessingOverlayActive() {
     return FlutterLocalNotificationPluginsPlatform.instance

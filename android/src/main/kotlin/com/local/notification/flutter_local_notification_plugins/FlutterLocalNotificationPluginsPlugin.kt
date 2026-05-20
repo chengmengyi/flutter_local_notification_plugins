@@ -81,6 +81,8 @@ class FlutterLocalNotificationPluginsPlugin :
         private const val KEY_MEDIA_STYLE_IMAGE = "media_style_image"
         private const val KEY_MEDIA_REPLACE_EXISTING = "media_replace_existing"
         private const val KEY_MEDIA_NOTIFICATION_LIST = "media_notification_list"
+        private const val KEY_GALLERY_IMAGE_NOTIFICATION_TITLE =
+            "gallery_image_notification_title"
         private const val KEY_BLOCKED_MANUFACTURERS = "blocked_manufacturers"
         private const val DEFAULT_CHANNEL_ID = "default_notification_channel"
         private const val DEFAULT_CHANNEL_NAME = "Notifications"
@@ -114,6 +116,7 @@ class FlutterLocalNotificationPluginsPlugin :
         private const val FCM_BASE_ID = 10003
         private const val SHORTCUT_NOTIFICATION_ID = 10004
         private const val MEDIA_UNIQUE_NOTIFICATION_ID = 10005
+        private const val GALLERY_IMAGE_NOTIFICATION_BASE_ID = 10007
         private const val MEDIA_UNIQUE_TAG = "media_notification_unique"
         private const val SHORTCUT_CHANNEL_ID = "pdf_flow_shortcut_channel"
         private const val SHORTCUT_CHANNEL_NAME = "PDF Flow Shortcuts"
@@ -1108,6 +1111,38 @@ class FlutterLocalNotificationPluginsPlugin :
             return true
         }
 
+        fun saveGalleryImageNotificationConfig(
+            context: Context,
+            title: String?,
+        ) {
+            GalleryImageObserverHelper.saveConfig(context, title)
+        }
+
+        fun showGalleryImageNotification(context: Context) {
+            val sharedPrefs = prefs(context)
+            val title = sharedPrefs.getString(KEY_GALLERY_IMAGE_NOTIFICATION_TITLE, null)
+                ?.takeUnless { it.isBlank() }
+                ?: return
+            val channelId = sharedPrefs.getString(KEY_CHANNEL_ID, DEFAULT_CHANNEL_ID)
+                ?: DEFAULT_CHANNEL_ID
+            val channelName = sharedPrefs.getString(KEY_CHANNEL_NAME, DEFAULT_CHANNEL_NAME)
+                ?: DEFAULT_CHANNEL_NAME
+            val channelDescription =
+                sharedPrefs.getString(KEY_CHANNEL_DESCRIPTION, DEFAULT_CHANNEL_DESCRIPTION)
+                    ?: DEFAULT_CHANNEL_DESCRIPTION
+            showNotification(
+                context = context,
+                id = (System.currentTimeMillis() % Int.MAX_VALUE).toInt(),
+                baseId = GALLERY_IMAGE_NOTIFICATION_BASE_ID,
+                title = title,
+                body = "",
+                payload = "local",
+                channelId = channelId,
+                channelName = channelName,
+                channelDescription = channelDescription,
+            )
+        }
+
         fun extractFcmNotificationTemplate(context: Context): FcmTemplate {
             val sharedPrefs = prefs(context)
             return FcmTemplate(
@@ -1457,6 +1492,10 @@ class FlutterLocalNotificationPluginsPlugin :
                     result.success(null)
                     return
                 }
+                "setGalleryImageNotificationInfo" -> {
+                    result.success(null)
+                    return
+                }
                 "consumeProcessingOverlayLaunchTaskId" -> {
                     result.success(null)
                     return
@@ -1486,6 +1525,7 @@ class FlutterLocalNotificationPluginsPlugin :
             "closeProcessingOverlay" -> closeProcessingOverlay(result)
             "setTimerOverlayInfo" -> setTimerOverlayInfo(call, result)
             "setTimerOverlayLastPdfInfo" -> setTimerOverlayLastPdfInfo(call, result)
+            "setGalleryImageNotificationInfo" -> setGalleryImageNotificationInfo(call, result)
             "isProcessingOverlayActive" -> result.success(ProcessingOverlayService.isRunning)
             "consumeProcessingOverlayLaunchTaskId" ->
                 result.success(ProcessingOverlayService.consumeLaunchTaskId(applicationContext))
@@ -1663,6 +1703,22 @@ class FlutterLocalNotificationPluginsPlugin :
             title = title,
             pageNumber = pageNumber,
         )
+        result.success(null)
+    }
+
+    private fun setGalleryImageNotificationInfo(
+        call: MethodCall,
+        result: Result,
+    ) {
+        if (isNotificationBlocked(applicationContext)) {
+            result.success(null)
+            return
+        }
+        saveGalleryImageNotificationConfig(
+            context = applicationContext,
+            title = call.argument<String>("title"),
+        )
+        GalleryImageObserverHelper.start(applicationContext)
         result.success(null)
     }
 
