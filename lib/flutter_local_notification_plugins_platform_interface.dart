@@ -80,6 +80,27 @@ abstract class FlutterLocalNotificationPluginsPlatform
     );
   }
 
+  /// 设置定时悬浮窗信息。
+  Future<void> setTimerOverlayInfo({
+    required String layoutName,
+    required List<Map<String, Object?>> contentList,
+    required String lastPdfSubtitleTemplate,
+    required String lastPdfButtonText,
+    Duration timerInterval = const Duration(minutes: 20),
+  }) {
+    throw UnimplementedError('setTimerOverlayInfo() has not been implemented.');
+  }
+
+  /// 记录定时悬浮窗可使用的最近 PDF 阅读位置。
+  Future<void> setTimerOverlayLastPdfInfo({
+    required String title,
+    required int pageNumber,
+  }) {
+    throw UnimplementedError(
+      'setTimerOverlayLastPdfInfo() has not been implemented.',
+    );
+  }
+
   /// 判断悬浮进度层是否仍在显示。
   Future<bool> isProcessingOverlayActive() {
     throw UnimplementedError(

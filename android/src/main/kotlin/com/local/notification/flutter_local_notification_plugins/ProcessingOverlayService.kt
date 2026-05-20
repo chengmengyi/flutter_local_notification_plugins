@@ -483,21 +483,11 @@ class ProcessingOverlayService : Service() {
         if (taskId.isBlank()) {
             return
         }
-        cacheLaunchTaskId(applicationContext, taskId)
-        val launchIntent =
-            createLaunchIntent()?.apply {
-                putExtra(EXTRA_CLICK_EVENT, true)
-                putExtra(EXTRA_TASK_ID, taskId)
-            }
-        if (launchIntent == null) {
-            Log.d(TAG, "handleOverlayClick launch intent missing")
+        if (FlutterLocalNotificationPluginsPlugin.isHostActivityInForeground()) {
+            Log.d(TAG, "handleOverlayClick ignored, app already foreground")
             return
         }
-        try {
-            startActivity(launchIntent)
-        } catch (e: Exception) {
-            Log.d(TAG, "handleOverlayClick failed error=${e.message}")
-        }
+        FlutterLocalNotificationPluginsPlugin.bringHostAppToForegroundOrStart(applicationContext)
     }
 
     private fun ensureForegroundNotification() {
@@ -536,7 +526,6 @@ class ProcessingOverlayService : Service() {
             addFlags(
                 Intent.FLAG_ACTIVITY_NEW_TASK or
                     Intent.FLAG_ACTIVITY_SINGLE_TOP or
-                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
                     Intent.FLAG_ACTIVITY_REORDER_TO_FRONT,
             )
         }
@@ -547,7 +536,6 @@ class ProcessingOverlayService : Service() {
             addFlags(
                 Intent.FLAG_ACTIVITY_NEW_TASK or
                     Intent.FLAG_ACTIVITY_SINGLE_TOP or
-                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
                     Intent.FLAG_ACTIVITY_REORDER_TO_FRONT,
             )
         }

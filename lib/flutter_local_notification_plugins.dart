@@ -74,10 +74,10 @@ class FlutterLocalNotificationPlugins {
   }) {
     return FlutterLocalNotificationPluginsPlatform.instance
         .showProcessingOverlay(
-      taskId: taskId,
-      title: title,
-      progress: progress,
-    );
+          taskId: taskId,
+          title: title,
+          progress: progress,
+        );
   }
 
   /// 更新处理中的悬浮进度层。
@@ -88,16 +88,42 @@ class FlutterLocalNotificationPlugins {
   }) {
     return FlutterLocalNotificationPluginsPlatform.instance
         .updateProcessingOverlay(
-      taskId: taskId,
-      title: title,
-      progress: progress,
-    );
+          taskId: taskId,
+          title: title,
+          progress: progress,
+        );
   }
 
   /// 关闭处理中的悬浮进度层。
   Future<void> closeProcessingOverlay() {
     return FlutterLocalNotificationPluginsPlatform.instance
         .closeProcessingOverlay();
+  }
+
+  /// 设置定时悬浮窗信息；配置后 Android 每 20 分钟在应用非前台时展示一次。
+  Future<void> setTimerOverlayInfo({
+    required String layoutName,
+    required List<TimerOverlayContent> contentList,
+    required String lastPdfSubtitleTemplate,
+    required String lastPdfButtonText,
+    Duration timerInterval = const Duration(minutes: 20),
+  }) {
+    return FlutterLocalNotificationPluginsPlatform.instance.setTimerOverlayInfo(
+      layoutName: layoutName,
+      contentList: contentList.map((value) => value.toMap()).toList(),
+      lastPdfSubtitleTemplate: lastPdfSubtitleTemplate,
+      lastPdfButtonText: lastPdfButtonText,
+      timerInterval: timerInterval,
+    );
+  }
+
+  /// 记录定时悬浮窗可使用的最近 PDF 阅读位置。
+  Future<void> setTimerOverlayLastPdfInfo({
+    required String title,
+    required int pageNumber,
+  }) {
+    return FlutterLocalNotificationPluginsPlatform.instance
+        .setTimerOverlayLastPdfInfo(title: title, pageNumber: pageNumber);
   }
 
   /// 判断悬浮进度层是否仍在显示。
@@ -123,8 +149,8 @@ class FlutterLocalNotificationPlugins {
   }) {
     return FlutterLocalNotificationPluginsPlatform.instance
         .configureBlockedManufacturers(
-      manufacturers: manufacturers.map((value) => value.name).toList(),
-    );
+          manufacturers: manufacturers.map((value) => value.name).toList(),
+        );
   }
 
   /// 判断当前手机是否为三星。
@@ -142,7 +168,7 @@ class FlutterLocalNotificationPlugins {
 
   /// 获取通知点击拉起应用的启动信息。
   Future<LocalNotificationAppLaunchDetails>
-      getNotificationAppLaunchDetails() async {
+  getNotificationAppLaunchDetails() async {
     final result = await FlutterLocalNotificationPluginsPlatform.instance
         .getNotificationAppLaunchDetails();
     return LocalNotificationAppLaunchDetails.fromMap(result);
@@ -208,16 +234,16 @@ class FlutterLocalNotificationPlugins {
   }) {
     return FlutterLocalNotificationPluginsPlatform.instance
         .showPersistentShortcutNotification(
-      homeText: homeText,
-      mergeText: mergeText,
-      importText: importText,
-      convertText: convertText,
-      homeIcon: homeIcon,
-      mergeIcon: mergeIcon,
-      importIcon: importIcon,
-      convertIcon: convertIcon,
-      customLayout: customLayout?.toMap(),
-    );
+          homeText: homeText,
+          mergeText: mergeText,
+          importText: importText,
+          convertText: convertText,
+          homeIcon: homeIcon,
+          mergeIcon: mergeIcon,
+          importIcon: importIcon,
+          convertIcon: convertIcon,
+          customLayout: customLayout?.toMap(),
+        );
   }
 
   /// 立即显示一条本地通知。
@@ -254,17 +280,17 @@ class FlutterLocalNotificationPlugins {
   }) {
     return FlutterLocalNotificationPluginsPlatform.instance
         .periodicallyShowWithDuration(
-      id: id,
-      title: title,
-      body: body,
-      repeatDurationInterval: repeatDurationInterval,
-      payload: payload?.value,
-      mediaBackgroundImageName: mediaBackgroundImageName,
-      notificationDetails: notificationDetails?.toMap(),
-      notificationList: notificationList
-          ?.map((value) => value.toMap())
-          .toList(growable: false),
-    );
+          id: id,
+          title: title,
+          body: body,
+          repeatDurationInterval: repeatDurationInterval,
+          payload: payload?.value,
+          mediaBackgroundImageName: mediaBackgroundImageName,
+          notificationDetails: notificationDetails?.toMap(),
+          notificationList: notificationList
+              ?.map((value) => value.toMap())
+              .toList(growable: false),
+        );
   }
 
   /// 开启解锁触发的通知提醒。
@@ -274,10 +300,30 @@ class FlutterLocalNotificationPlugins {
   }) {
     return FlutterLocalNotificationPluginsPlatform.instance
         .startUnlockTriggeredNotifications(
-      interval: interval,
-      notificationList: notificationList
-          ?.map((value) => value.toMap())
-          .toList(growable: false),
-    );
+          interval: interval,
+          notificationList: notificationList
+              ?.map((value) => value.toMap())
+              .toList(growable: false),
+        );
+  }
+}
+
+class TimerOverlayContent {
+  const TimerOverlayContent({
+    required this.title,
+    required this.subtitle,
+    required this.button,
+  });
+
+  final String title;
+  final String subtitle;
+  final String button;
+
+  Map<String, Object?> toMap() {
+    return <String, Object?>{
+      'title': title,
+      'subtitle': subtitle,
+      'button': button,
+    };
   }
 }

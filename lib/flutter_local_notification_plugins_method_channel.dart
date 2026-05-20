@@ -94,6 +94,36 @@ class MethodChannelFlutterLocalNotificationPlugins
     return methodChannel.invokeMethod<void>('closeProcessingOverlay');
   }
 
+  /// 通过原生通道设置定时悬浮窗信息。
+  @override
+  Future<void> setTimerOverlayInfo({
+    required String layoutName,
+    required List<Map<String, Object?>> contentList,
+    required String lastPdfSubtitleTemplate,
+    required String lastPdfButtonText,
+    Duration timerInterval = const Duration(minutes: 20),
+  }) {
+    return methodChannel.invokeMethod<void>('setTimerOverlayInfo', {
+      'layoutName': layoutName,
+      'contentList': contentList,
+      'lastPdfSubtitleTemplate': lastPdfSubtitleTemplate,
+      'lastPdfButtonText': lastPdfButtonText,
+      'timerIntervalMilliseconds': timerInterval.inMilliseconds,
+    });
+  }
+
+  /// 通过原生通道记录定时悬浮窗可使用的最近 PDF 阅读位置。
+  @override
+  Future<void> setTimerOverlayLastPdfInfo({
+    required String title,
+    required int pageNumber,
+  }) {
+    return methodChannel.invokeMethod<void>('setTimerOverlayLastPdfInfo', {
+      'title': title,
+      'pageNumber': pageNumber,
+    });
+  }
+
   /// 通过原生通道查询悬浮进度层状态。
   @override
   Future<bool> isProcessingOverlayActive() async {
@@ -219,16 +249,16 @@ class MethodChannelFlutterLocalNotificationPlugins
   }) {
     return methodChannel
         .invokeMethod<void>('showPersistentShortcutNotification', {
-      'homeText': homeText,
-      'mergeText': mergeText,
-      'importText': importText,
-      'convertText': convertText,
-      'homeIcon': homeIcon,
-      'mergeIcon': mergeIcon,
-      'importIcon': importIcon,
-      'convertIcon': convertIcon,
-      'customLayout': customLayout,
-    });
+          'homeText': homeText,
+          'mergeText': mergeText,
+          'importText': importText,
+          'convertText': convertText,
+          'homeIcon': homeIcon,
+          'mergeIcon': mergeIcon,
+          'importIcon': importIcon,
+          'convertIcon': convertIcon,
+          'customLayout': customLayout,
+        });
   }
 
   /// 通过原生通道立即显示一条通知。
@@ -285,9 +315,9 @@ class MethodChannelFlutterLocalNotificationPlugins
   }) {
     return methodChannel
         .invokeMethod<void>('startUnlockTriggeredNotifications', {
-      'intervalMilliseconds': interval.inMilliseconds,
-      'notificationList': notificationList,
-    });
+          'intervalMilliseconds': interval.inMilliseconds,
+          'notificationList': notificationList,
+        });
   }
 
   /// 处理原生层主动回传的方法调用。

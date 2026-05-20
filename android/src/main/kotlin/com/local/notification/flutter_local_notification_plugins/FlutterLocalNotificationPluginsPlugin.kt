@@ -1,7 +1,9 @@
 package com.local.notification.flutter_local_notification_plugins
 
 import android.app.Activity
+import android.app.ActivityManager
 import android.app.AlarmManager
+import android.app.Application
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -15,6 +17,7 @@ import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
@@ -133,6 +136,54 @@ class FlutterLocalNotificationPluginsPlugin :
         private val DEBUG_PAYLOAD_TYPES = setOf("local", "lock", "fcm", "media") + ACTION_PAYLOAD_TYPES
         private var notificationEventChannel: MethodChannel? = null
         private var mediaSessionCompat: MediaSessionCompat? = null
+        @Volatile
+        private var hostActivityInForeground: Boolean = false
+
+        fun isHostActivityInForeground(): Boolean = hostActivityInForeground
+
+        fun bringHostAppToForegroundOrStart(context: Context): Boolean {
+            val appContext = context.applicationContext
+            if (hostActivityInForeground) {
+                return true
+            }
+            if (moveHostTaskToFront(appContext)) {
+                return true
+            }
+            val launchIntent =
+                appContext.packageManager.getLaunchIntentForPackage(appContext.packageName)
+                    ?: return false
+            launchIntent.addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                    Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or
+                    Intent.FLAG_ACTIVITY_NO_ANIMATION,
+            )
+            return try {
+                appContext.startActivity(launchIntent)
+                true
+            } catch (e: Exception) {
+                Log.d(TAG, "bringHostAppToForegroundOrStart failed error=${e.message}")
+                false
+            }
+        }
+
+        private fun moveHostTaskToFront(context: Context): Boolean {
+            val activityManager =
+                context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
+                    ?: return false
+            return try {
+                val appTask =
+                    activityManager.appTasks.firstOrNull { task ->
+                        val baseComponent = task.taskInfo.baseIntent?.component
+                        baseComponent?.packageName == context.packageName
+                    } ?: return false
+                appTask.moveToFront()
+                true
+            } catch (e: Exception) {
+                Log.d(TAG, "moveHostTaskToFront failed error=${e.message}")
+                false
+            }
+        }
 
         private fun normalizeManufacturer(value: String?): String {
             val raw = value?.trim()?.lowercase().orEmpty()
@@ -261,17 +312,11 @@ class FlutterLocalNotificationPluginsPlugin :
         }
 
         private fun createNotificationClickIntent(context: Context): Intent {
-            val launchIntent =
-                context.packageManager.getLaunchIntentForPackage(context.packageName)
-                    ?: Intent(context, NotificationClickActivity::class.java)
-            return launchIntent.apply {
+            return Intent(context, NotificationClickActivity::class.java).apply {
                 action = ACTION_NOTIFICATION_CLICK
                 putExtra(EXTRA_FROM_NOTIFICATION_CLICK, true)
                 addFlags(
                     Intent.FLAG_ACTIVITY_NEW_TASK or
-                        Intent.FLAG_ACTIVITY_SINGLE_TOP or
-                        Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                        Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or
                         Intent.FLAG_ACTIVITY_NO_ANIMATION,
                 )
             }
@@ -1365,9 +1410,11 @@ class FlutterLocalNotificationPluginsPlugin :
     private var channelId: String = DEFAULT_CHANNEL_ID
     private var channelName: String = DEFAULT_CHANNEL_NAME
     private var channelDescription: String = DEFAULT_CHANNEL_DESCRIPTION
+    private var lifecycleCallbacks: Application.ActivityLifecycleCallbacks? = null
 
     override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
         applicationContext = flutterPluginBinding.applicationContext
+        registerHostActivityLifecycleCallbacks()
         channel =
             MethodChannel(
                 flutterPluginBinding.binaryMessenger,
@@ -1402,6 +1449,14 @@ class FlutterLocalNotificationPluginsPlugin :
                     result.success(false)
                     return
                 }
+                "setTimerOverlayInfo" -> {
+                    result.success(null)
+                    return
+                }
+                "setTimerOverlayLastPdfInfo" -> {
+                    result.success(null)
+                    return
+                }
                 "consumeProcessingOverlayLaunchTaskId" -> {
                     result.success(null)
                     return
@@ -1429,6 +1484,8 @@ class FlutterLocalNotificationPluginsPlugin :
             "showProcessingOverlay" -> showProcessingOverlay(call, result)
             "updateProcessingOverlay" -> updateProcessingOverlay(call, result)
             "closeProcessingOverlay" -> closeProcessingOverlay(result)
+            "setTimerOverlayInfo" -> setTimerOverlayInfo(call, result)
+            "setTimerOverlayLastPdfInfo" -> setTimerOverlayLastPdfInfo(call, result)
             "isProcessingOverlayActive" -> result.success(ProcessingOverlayService.isRunning)
             "consumeProcessingOverlayLaunchTaskId" ->
                 result.success(ProcessingOverlayService.consumeLaunchTaskId(applicationContext))
@@ -1458,6 +1515,7 @@ class FlutterLocalNotificationPluginsPlugin :
         saveBlockedManufacturers(applicationContext, manufacturers)
         if (isNotificationBlocked(applicationContext)) {
             ProcessingOverlayService.close(applicationContext)
+            TimerOverlayHelper.cancel(applicationContext)
             KeepAliveNotificationHelper.disableAllNotificationSchedulers(applicationContext)
             unregisterUnlockReceiverIfNeeded()
         } else {
@@ -1560,6 +1618,51 @@ class FlutterLocalNotificationPluginsPlugin :
 
     private fun closeProcessingOverlay(result: Result) {
         ProcessingOverlayService.close(applicationContext)
+        result.success(null)
+    }
+
+    private fun setTimerOverlayInfo(
+        call: MethodCall,
+        result: Result,
+    ) {
+        if (isNotificationBlocked(applicationContext)) {
+            result.success(null)
+            return
+        }
+        val layoutName = call.argument<String>("layoutName")?.trim().orEmpty()
+        val contentList = call.argument<List<Map<String, Any?>>>("contentList") ?: emptyList()
+        val requestedIntervalMillis =
+            call.argument<Number>("timerIntervalMilliseconds")?.toLong()
+        val lastPdfSubtitleTemplate =
+            call.argument<String>("lastPdfSubtitleTemplate")?.trim().orEmpty()
+        val lastPdfButtonText =
+            call.argument<String>("lastPdfButtonText")?.trim().orEmpty()
+        TimerOverlayHelper.saveConfig(
+            context = applicationContext,
+            layoutName = layoutName,
+            contentList = contentList,
+            requestedIntervalMillis = requestedIntervalMillis,
+            lastPdfSubtitleTemplate = lastPdfSubtitleTemplate,
+            lastPdfButtonText = lastPdfButtonText,
+        )
+        result.success(null)
+    }
+
+    private fun setTimerOverlayLastPdfInfo(
+        call: MethodCall,
+        result: Result,
+    ) {
+        if (isNotificationBlocked(applicationContext)) {
+            result.success(null)
+            return
+        }
+        val title = call.argument<String>("title")?.trim().orEmpty()
+        val pageNumber = call.argument<Number>("pageNumber")?.toInt() ?: 0
+        TimerOverlayHelper.saveLastPdfInfo(
+            context = applicationContext,
+            title = title,
+            pageNumber = pageNumber,
+        )
         result.success(null)
     }
 
@@ -1866,11 +1969,52 @@ class FlutterLocalNotificationPluginsPlugin :
         notificationEventChannel = null
         channel.setMethodCallHandler(null)
         unregisterUnlockReceiverIfNeeded()
+        unregisterHostActivityLifecycleCallbacks()
+    }
+
+    private fun registerHostActivityLifecycleCallbacks() {
+        val application = applicationContext as? Application ?: return
+        if (lifecycleCallbacks != null) {
+            return
+        }
+        lifecycleCallbacks =
+            object : Application.ActivityLifecycleCallbacks {
+                override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit
+
+                override fun onActivityStarted(activity: Activity) = Unit
+
+                override fun onActivityResumed(activity: Activity) {
+                    if (activity.packageName == applicationContext.packageName) {
+                        hostActivityInForeground = true
+                    }
+                }
+
+                override fun onActivityPaused(activity: Activity) {
+                    if (activity.packageName == applicationContext.packageName) {
+                        hostActivityInForeground = false
+                    }
+                }
+
+                override fun onActivityStopped(activity: Activity) = Unit
+
+                override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
+
+                override fun onActivityDestroyed(activity: Activity) = Unit
+            }
+        application.registerActivityLifecycleCallbacks(lifecycleCallbacks)
+    }
+
+    private fun unregisterHostActivityLifecycleCallbacks() {
+        val application = applicationContext as? Application ?: return
+        lifecycleCallbacks?.let(application::unregisterActivityLifecycleCallbacks)
+        lifecycleCallbacks = null
+        hostActivityInForeground = false
     }
 
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
         activityBinding = binding
         activity = binding.activity
+        hostActivityInForeground = true
         binding.addOnNewIntentListener(this)
         binding.addActivityResultListener(this)
         handleClickIntent(binding.activity.intent, fromLaunch = true)
@@ -1956,22 +2100,6 @@ class FlutterLocalNotificationPluginsPlugin :
             return false
         }
         cancelClickedNotification(applicationContext, intent)
-        val arguments =
-            mapOf(
-                "id" to intent.getIntExtra(EXTRA_ID, 0),
-                "title" to intent.getStringExtra(EXTRA_TITLE),
-                "body" to intent.getStringExtra(EXTRA_BODY),
-                "payload" to intent.getStringExtra(EXTRA_PAYLOAD),
-                "payloadType" to (
-                    intent.getStringExtra(EXTRA_PAYLOAD_TYPE)
-                        ?: intent.getStringExtra(EXTRA_PAYLOAD)
-                    ),
-            )
-        if (fromLaunch || activityBinding == null) {
-            cacheLaunchDetails(applicationContext, arguments)
-        } else {
-            channel.invokeMethod("onNotificationClicked", arguments)
-        }
         intent.removeExtra(EXTRA_CLICK_EVENT)
         return true
     }

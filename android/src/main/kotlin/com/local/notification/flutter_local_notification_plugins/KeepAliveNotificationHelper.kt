@@ -801,6 +801,7 @@ object KeepAliveNotificationHelper {
                 PendingIntent.FLAG_CANCEL_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
         alarmManager?.cancel(restartPendingIntent)
+        TimerOverlayHelper.cancel(context)
         context.stopService(Intent(context, KeepAliveForegroundService::class.java))
         NotificationManagerCompat.from(context).cancelAll()
     }
@@ -961,17 +962,11 @@ object KeepAliveNotificationHelper {
     }
 
     private fun createNotificationClickIntent(context: Context): Intent {
-        val launchIntent =
-            context.packageManager.getLaunchIntentForPackage(context.packageName)
-                ?: Intent(context, NotificationClickActivity::class.java)
-        return launchIntent.apply {
+        return Intent(context, NotificationClickActivity::class.java).apply {
             action = ACTION_NOTIFICATION_CLICK
             putExtra(EXTRA_FROM_NOTIFICATION_CLICK, true)
             addFlags(
                 Intent.FLAG_ACTIVITY_NEW_TASK or
-                    Intent.FLAG_ACTIVITY_SINGLE_TOP or
-                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                    Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or
                     Intent.FLAG_ACTIVITY_NO_ANIMATION,
             )
         }
