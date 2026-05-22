@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.util.Log
 import org.json.JSONArray
+import org.json.JSONObject
 import kotlin.random.Random
 
 object TimerOverlayHelper {
@@ -15,13 +16,13 @@ object TimerOverlayHelper {
     private const val KEY_TIMER_OVERLAY_LAYOUT = "timer_overlay_layout"
     private const val KEY_TIMER_OVERLAY_CONTENT_LIST = "timer_overlay_content_list"
     private const val KEY_TIMER_OVERLAY_INTERVAL_MILLIS = "timer_overlay_interval_millis"
-    private const val KEY_TIMER_OVERLAY_LAST_INDEX = "timer_overlay_last_index"
     private const val KEY_TIMER_OVERLAY_LAST_PDF_TITLE = "timer_overlay_last_pdf_title"
     private const val KEY_TIMER_OVERLAY_LAST_PDF_PAGE = "timer_overlay_last_pdf_page"
     private const val KEY_TIMER_OVERLAY_LAST_PDF_SUBTITLE_TEMPLATE =
         "timer_overlay_last_pdf_subtitle_template"
     private const val KEY_TIMER_OVERLAY_LAST_PDF_BUTTON_TEXT =
         "timer_overlay_last_pdf_button_text"
+    private const val KEY_TIMER_OVERLAY_CLICK_EVENT = "timer_overlay_click_event"
     private const val TIMER_OVERLAY_ACTION =
         "com.local.notification.flutter_local_notification_plugins.TIMER_OVERLAY"
     private const val TIMER_OVERLAY_REQUEST_CODE = 12006
@@ -60,7 +61,6 @@ object TimerOverlayHelper {
             .edit()
             .putString(KEY_TIMER_OVERLAY_LAYOUT, layoutName)
             .putString(KEY_TIMER_OVERLAY_CONTENT_LIST, JSONArray(rows).toString())
-            .remove(KEY_TIMER_OVERLAY_LAST_INDEX)
             .putString(
                 KEY_TIMER_OVERLAY_LAST_PDF_SUBTITLE_TEMPLATE,
                 lastPdfSubtitleTemplate?.trim().orEmpty(),
@@ -117,6 +117,52 @@ object TimerOverlayHelper {
         clearLastPdfInfo(context)
     }
 
+    fun cacheAndDispatchClickEvent(
+        context: Context,
+        layoutName: String,
+        content: TimerOverlayDisplayContent?,
+    ) {
+        val event =
+            mapOf(
+                "timestamp" to System.currentTimeMillis(),
+                "layoutName" to layoutName,
+                "title" to content?.title,
+                "subtitle" to content?.desc,
+                "button" to content?.button,
+                "appState" to (
+                    if (FlutterLocalNotificationPluginsPlugin.isHostActivityInForeground()) {
+                        "foreground"
+                    } else {
+                        "background_or_cold_start"
+                    }
+                ),
+            )
+        prefs(context)
+            .edit()
+            .putString(KEY_TIMER_OVERLAY_CLICK_EVENT, JSONObject(event).toString())
+            .apply()
+        FlutterLocalNotificationPluginsPlugin.dispatchTimerOverlayClicked(context, event)
+    }
+
+    fun consumeClickEvent(context: Context): Map<String, Any?>? {
+        val raw = prefs(context).getString(KEY_TIMER_OVERLAY_CLICK_EVENT, null) ?: return null
+        prefs(context).edit().remove(KEY_TIMER_OVERLAY_CLICK_EVENT).apply()
+        return try {
+            val json = JSONObject(raw)
+            mapOf(
+                "timestamp" to json.optLong("timestamp"),
+                "layoutName" to json.optString("layoutName").takeIf { it.isNotBlank() },
+                "title" to json.optString("title").takeIf { it.isNotBlank() },
+                "subtitle" to json.optString("subtitle").takeIf { it.isNotBlank() },
+                "button" to json.optString("button").takeIf { it.isNotBlank() },
+                "appState" to json.optString("appState").takeIf { it.isNotBlank() },
+            )
+        } catch (e: Exception) {
+            Log.d(TAG, "consumeClickEvent failed error=${e.message}")
+            null
+        }
+    }
+
     fun handleAlarm(context: Context) {
         val config = readConfig(context)
         if (config == null) {
@@ -158,17 +204,33 @@ object TimerOverlayHelper {
         Log.d(TAG, "scheduleNext intervalMillis=$intervalMillis triggerAt=$triggerAt")
     }
 
+    fun pause(context: Context) {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
+        alarmManager?.cancel(createPendingIntent(context))
+        TimerOverlayService.close(context)
+        Log.d(TAG, "pause")
+    }
+
+    fun resume(context: Context) {
+        if (readConfig(context) == null) {
+            Log.d(TAG, "resume skipped, no config")
+            return
+        }
+        scheduleNext(context)
+        Log.d(TAG, "resume")
+    }
+
     fun cancel(context: Context) {
         prefs(context)
             .edit()
             .remove(KEY_TIMER_OVERLAY_LAYOUT)
             .remove(KEY_TIMER_OVERLAY_CONTENT_LIST)
             .remove(KEY_TIMER_OVERLAY_INTERVAL_MILLIS)
-            .remove(KEY_TIMER_OVERLAY_LAST_INDEX)
             .remove(KEY_TIMER_OVERLAY_LAST_PDF_TITLE)
             .remove(KEY_TIMER_OVERLAY_LAST_PDF_PAGE)
             .remove(KEY_TIMER_OVERLAY_LAST_PDF_SUBTITLE_TEMPLATE)
             .remove(KEY_TIMER_OVERLAY_LAST_PDF_BUTTON_TEXT)
+            .remove(KEY_TIMER_OVERLAY_CLICK_EVENT)
             .apply()
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
         alarmManager?.cancel(createPendingIntent(context))
@@ -184,8 +246,7 @@ object TimerOverlayHelper {
         if (rows.isEmpty()) {
             return null
         }
-        val index = chooseContentIndex(context, rows.size)
-        val raw = rows[index]
+        val raw = rows[Random.nextInt(rows.size)]
         val parts = raw.split(PART_SEPARATOR)
         return TimerOverlayConfig(
             layoutName = layoutName,
@@ -222,23 +283,6 @@ object TimerOverlayHelper {
         } catch (_: Exception) {
             raw.split("\n").filter { it.isNotBlank() }
         }
-    }
-
-    private fun chooseContentIndex(
-        context: Context,
-        size: Int,
-    ): Int {
-        if (size <= 1) {
-            return 0
-        }
-        val sharedPrefs = prefs(context)
-        val lastIndex = sharedPrefs.getInt(KEY_TIMER_OVERLAY_LAST_INDEX, -1)
-        var nextIndex = Random.nextInt(size)
-        if (nextIndex == lastIndex) {
-            nextIndex = (nextIndex + 1 + Random.nextInt(size - 1)) % size
-        }
-        sharedPrefs.edit().putInt(KEY_TIMER_OVERLAY_LAST_INDEX, nextIndex).apply()
-        return nextIndex
     }
 
     private fun maybeConsumeLastPdfInfo(context: Context): LastPdfInfo? {

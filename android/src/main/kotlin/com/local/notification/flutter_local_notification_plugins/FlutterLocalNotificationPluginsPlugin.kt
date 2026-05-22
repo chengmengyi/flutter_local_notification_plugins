@@ -122,6 +122,7 @@ class FlutterLocalNotificationPluginsPlugin :
         private const val SHORTCUT_CHANNEL_NAME = "PDF Flow Shortcuts"
         private const val SHORTCUT_CHANNEL_DESCRIPTION = "PDF Flow shortcut notification"
         private const val REQUEST_CODE_OVERLAY_PERMISSION = 14589
+        private const val OVERLAY_PERMISSION_GUIDE_DELAY_MILLIS = 300L
         private val ACTION_PAYLOAD_TYPES =
             setOf(
                 "USER_PRESENT",
@@ -961,6 +962,17 @@ class FlutterLocalNotificationPluginsPlugin :
             return true
         }
 
+        fun dispatchTimerOverlayClicked(
+            context: Context,
+            arguments: Map<String, Any?>,
+        ): Boolean {
+            val channel = notificationEventChannel ?: return false
+            Handler(Looper.getMainLooper()).post {
+                channel.invokeMethod("onTimerOverlayClicked", arguments)
+            }
+            return true
+        }
+
         fun cacheLaunchDetails(context: Context, arguments: Map<String, Any?>) {
             val raw =
                 listOf(
@@ -1136,7 +1148,7 @@ class FlutterLocalNotificationPluginsPlugin :
                 baseId = GALLERY_IMAGE_NOTIFICATION_BASE_ID,
                 title = title,
                 body = "",
-                payload = "local",
+                payload = "notify_new_file",
                 channelId = channelId,
                 channelName = channelName,
                 channelDescription = channelDescription,
@@ -1471,6 +1483,7 @@ class FlutterLocalNotificationPluginsPlugin :
                 "getPlatformVersion",
                 "consumeDisplayedNotificationCount",
                 "getNotificationAppLaunchDetails",
+                "consumeTimerOverlayClickEvent",
                 -> {}
                 "initNotification" -> {
                     result.success(false)
@@ -1485,6 +1498,12 @@ class FlutterLocalNotificationPluginsPlugin :
                     return
                 }
                 "setTimerOverlayInfo" -> {
+                    result.success(null)
+                    return
+                }
+                "pauseTimerOverlay",
+                "resumeTimerOverlay",
+                -> {
                     result.success(null)
                     return
                 }
@@ -1524,8 +1543,18 @@ class FlutterLocalNotificationPluginsPlugin :
             "updateProcessingOverlay" -> updateProcessingOverlay(call, result)
             "closeProcessingOverlay" -> closeProcessingOverlay(result)
             "setTimerOverlayInfo" -> setTimerOverlayInfo(call, result)
+            "pauseTimerOverlay" -> {
+                TimerOverlayHelper.pause(applicationContext)
+                result.success(null)
+            }
+            "resumeTimerOverlay" -> {
+                TimerOverlayHelper.resume(applicationContext)
+                result.success(null)
+            }
             "setTimerOverlayLastPdfInfo" -> setTimerOverlayLastPdfInfo(call, result)
             "setGalleryImageNotificationInfo" -> setGalleryImageNotificationInfo(call, result)
+            "consumeTimerOverlayClickEvent" ->
+                result.success(TimerOverlayHelper.consumeClickEvent(applicationContext))
             "isProcessingOverlayActive" -> result.success(ProcessingOverlayService.isRunning)
             "consumeProcessingOverlayLaunchTaskId" ->
                 result.success(ProcessingOverlayService.consumeLaunchTaskId(applicationContext))
@@ -1586,7 +1615,12 @@ class FlutterLocalNotificationPluginsPlugin :
                 permissionIntent,
                 REQUEST_CODE_OVERLAY_PERMISSION,
             )
-            showOverlayPermissionGuide(targetActivity)
+            Handler(Looper.getMainLooper()).postDelayed(
+                {
+                    showOverlayPermissionGuide(targetActivity)
+                },
+                OVERLAY_PERMISSION_GUIDE_DELAY_MILLIS,
+            )
         } catch (e: Exception) {
             Log.d(TAG, "requestOverlayPermission failed error=${e.message}")
             pendingOverlayPermissionResult = null

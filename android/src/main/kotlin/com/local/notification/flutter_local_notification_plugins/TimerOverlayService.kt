@@ -141,6 +141,11 @@ class TimerOverlayService : Service() {
             LayoutInflater.from(this).inflate(layoutResId, null, false).apply {
                 isClickable = true
                 setOnClickListener {
+                    TimerOverlayHelper.cacheAndDispatchClickEvent(
+                        context = applicationContext,
+                        layoutName = layoutName,
+                        content = pendingDisplayContent,
+                    )
                     FlutterLocalNotificationPluginsPlugin.bringHostAppToForegroundOrStart(
                         applicationContext,
                     )
@@ -170,7 +175,6 @@ class TimerOverlayService : Service() {
             if (displayContent?.shouldClearLastPdfInfoAfterDisplay == true) {
                 TimerOverlayHelper.clearLastPdfInfoAfterDisplay(applicationContext)
             }
-            pendingDisplayContent = null
         } catch (e: Exception) {
             pendingDisplayContent = null
             Log.d(TAG, "showOverlay failed error=${e.message}")

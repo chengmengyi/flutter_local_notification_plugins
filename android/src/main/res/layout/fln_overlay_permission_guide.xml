@@ -28,7 +28,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="@string/fln_overlay_permission_guide_title"
-                android:textColor="#000000"
+                android:textColor="#FFFFFF"
                 android:textSize="12sp"
                 android:textStyle="bold" />
 
@@ -37,7 +37,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="@string/fln_overlay_permission_guide_description"
-                android:textColor="#8D8D8D"
+                android:textColor="#C0C0C0"
                 android:textSize="12sp" />
         </LinearLayout>
 
@@ -47,7 +47,8 @@
             android:layout_marginTop="10dp"
             android:gravity="center_vertical"
             android:orientation="horizontal"
-            android:padding="10dp">
+            android:padding="10dp"
+            android:background="@drawable/fln_overlay_permission_guide_app_info_bg">
 
             <ImageView
                 android:id="@+id/icon_logo"
@@ -77,6 +78,7 @@
             android:layout_width="14dp"
             android:layout_height="8dp"
             android:layout_marginTop="12dp"
-            android:src="@drawable/arrow_top" />
+            android:src="@drawable/arrow_top"
+            android:rotation="180"/>
     </LinearLayout>
 </FrameLayout>

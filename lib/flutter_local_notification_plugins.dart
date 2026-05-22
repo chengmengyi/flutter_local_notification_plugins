@@ -25,6 +25,7 @@ class FlutterLocalNotificationPlugins {
     void Function(LocalNotificationEvent event)? onNotificationDisplayed,
     void Function(LocalNotificationEvent event)? onNotificationClicked,
     void Function(String taskId)? onProcessingOverlayClicked,
+    void Function(TimerOverlayClickEvent event)? onTimerOverlayClicked,
   }) {
     final platform = FlutterLocalNotificationPluginsPlatform.instance;
     if (platform is MethodChannelFlutterLocalNotificationPlugins) {
@@ -36,6 +37,9 @@ class FlutterLocalNotificationPlugins {
       }
       if (onProcessingOverlayClicked != null) {
         platform.onProcessingOverlayClicked = onProcessingOverlayClicked;
+      }
+      if (onTimerOverlayClicked != null) {
+        platform.onTimerOverlayClicked = onTimerOverlayClicked;
       }
     }
   }
@@ -117,6 +121,17 @@ class FlutterLocalNotificationPlugins {
     );
   }
 
+  /// 暂停定时悬浮窗；保留配置但取消下一次定时展示。
+  Future<void> pauseTimerOverlay() {
+    return FlutterLocalNotificationPluginsPlatform.instance.pauseTimerOverlay();
+  }
+
+  /// 恢复已配置的定时悬浮窗。
+  Future<void> resumeTimerOverlay() {
+    return FlutterLocalNotificationPluginsPlatform.instance
+        .resumeTimerOverlay();
+  }
+
   /// 记录定时悬浮窗可使用的最近 PDF 阅读位置。
   Future<void> setTimerOverlayLastPdfInfo({
     required String title,
@@ -130,6 +145,16 @@ class FlutterLocalNotificationPlugins {
   Future<void> setGalleryImageNotificationInfo({required String title}) {
     return FlutterLocalNotificationPluginsPlatform.instance
         .setGalleryImageNotificationInfo(title: title);
+  }
+
+  /// 取出并清空定时悬浮窗点击事件，用于冷启动/后台恢复后的打点兜底。
+  Future<TimerOverlayClickEvent?> consumeTimerOverlayClickEvent() async {
+    final result = await FlutterLocalNotificationPluginsPlatform.instance
+        .consumeTimerOverlayClickEvent();
+    if (result == null || result.isEmpty) {
+      return null;
+    }
+    return TimerOverlayClickEvent.fromMap(result);
   }
 
   /// 判断悬浮进度层是否仍在显示。
@@ -311,25 +336,5 @@ class FlutterLocalNotificationPlugins {
               ?.map((value) => value.toMap())
               .toList(growable: false),
         );
-  }
-}
-
-class TimerOverlayContent {
-  const TimerOverlayContent({
-    required this.title,
-    required this.subtitle,
-    required this.button,
-  });
-
-  final String title;
-  final String subtitle;
-  final String button;
-
-  Map<String, Object?> toMap() {
-    return <String, Object?>{
-      'title': title,
-      'subtitle': subtitle,
-      'button': button,
-    };
   }
 }

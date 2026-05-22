@@ -161,6 +161,7 @@ object CustomNotificationLayoutHelper {
             idName = ID_ACTION_TEXT,
             text = config.actionText,
             hideWhenEmpty = false,
+            updateVisibility = false,
         )
         bindText(
             context = context,
@@ -185,15 +186,18 @@ object CustomNotificationLayoutHelper {
         idName: String,
         text: String?,
         hideWhenEmpty: Boolean,
+        updateVisibility: Boolean = true,
     ) {
         val viewId = resolveIdentifier(context, idName, "id") ?: return
         if (text.isNullOrBlank()) {
-            if (hideWhenEmpty) {
+            if (hideWhenEmpty && updateVisibility) {
                 views.setViewVisibility(viewId, View.GONE)
             }
             return
         }
-        views.setViewVisibility(viewId, View.VISIBLE)
+        if (updateVisibility) {
+            views.setViewVisibility(viewId, View.VISIBLE)
+        }
         views.setTextViewText(viewId, text)
     }
 

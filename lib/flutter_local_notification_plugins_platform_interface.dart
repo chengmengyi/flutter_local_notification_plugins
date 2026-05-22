@@ -91,6 +91,16 @@ abstract class FlutterLocalNotificationPluginsPlatform
     throw UnimplementedError('setTimerOverlayInfo() has not been implemented.');
   }
 
+  /// 暂停定时悬浮窗；保留配置但取消下一次定时展示。
+  Future<void> pauseTimerOverlay() {
+    throw UnimplementedError('pauseTimerOverlay() has not been implemented.');
+  }
+
+  /// 恢复已配置的定时悬浮窗。
+  Future<void> resumeTimerOverlay() {
+    throw UnimplementedError('resumeTimerOverlay() has not been implemented.');
+  }
+
   /// 记录定时悬浮窗可使用的最近 PDF 阅读位置。
   Future<void> setTimerOverlayLastPdfInfo({
     required String title,
@@ -105,6 +115,13 @@ abstract class FlutterLocalNotificationPluginsPlatform
   Future<void> setGalleryImageNotificationInfo({required String title}) {
     throw UnimplementedError(
       'setGalleryImageNotificationInfo() has not been implemented.',
+    );
+  }
+
+  /// 取出并清空定时悬浮窗点击事件。
+  Future<Map<String, dynamic>?> consumeTimerOverlayClickEvent() {
+    throw UnimplementedError(
+      'consumeTimerOverlayClickEvent() has not been implemented.',
     );
   }
 

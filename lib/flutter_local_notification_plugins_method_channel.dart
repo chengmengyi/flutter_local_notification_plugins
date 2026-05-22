@@ -16,6 +16,7 @@ class MethodChannelFlutterLocalNotificationPlugins
   ValueChanged<LocalNotificationEvent>? onNotificationDisplayed;
   ValueChanged<LocalNotificationEvent>? onNotificationClicked;
   ValueChanged<String>? onProcessingOverlayClicked;
+  ValueChanged<TimerOverlayClickEvent>? onTimerOverlayClicked;
 
   MethodChannelFlutterLocalNotificationPlugins() {
     methodChannel.setMethodCallHandler(_handleMethodCall);
@@ -112,6 +113,18 @@ class MethodChannelFlutterLocalNotificationPlugins
     });
   }
 
+  /// 通过原生通道暂停定时悬浮窗。
+  @override
+  Future<void> pauseTimerOverlay() {
+    return methodChannel.invokeMethod<void>('pauseTimerOverlay');
+  }
+
+  /// 通过原生通道恢复定时悬浮窗。
+  @override
+  Future<void> resumeTimerOverlay() {
+    return methodChannel.invokeMethod<void>('resumeTimerOverlay');
+  }
+
   /// 通过原生通道记录定时悬浮窗可使用的最近 PDF 阅读位置。
   @override
   Future<void> setTimerOverlayLastPdfInfo({
@@ -130,6 +143,14 @@ class MethodChannelFlutterLocalNotificationPlugins
     return methodChannel.invokeMethod<void>('setGalleryImageNotificationInfo', {
       'title': title,
     });
+  }
+
+  /// 通过原生通道取出并清空定时悬浮窗点击事件。
+  @override
+  Future<Map<String, dynamic>?> consumeTimerOverlayClickEvent() {
+    return methodChannel.invokeMapMethod<String, dynamic>(
+      'consumeTimerOverlayClickEvent',
+    );
   }
 
   /// 通过原生通道查询悬浮进度层状态。
@@ -345,6 +366,10 @@ class MethodChannelFlutterLocalNotificationPlugins
         if (taskId != null && taskId.isNotEmpty) {
           onProcessingOverlayClicked?.call(taskId);
         }
+        break;
+      case 'onTimerOverlayClicked':
+        final args = (call.arguments as Map?) ?? <dynamic, dynamic>{};
+        onTimerOverlayClicked?.call(TimerOverlayClickEvent.fromMap(args));
         break;
       default:
         break;

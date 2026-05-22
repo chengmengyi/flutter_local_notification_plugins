@@ -18,10 +18,10 @@ class AndroidCustomNotificationLayout {
 
   /// 转成通知自定义布局配置。
   Map<String, Object?> toMap() => <String, Object?>{
-        'smallLayoutName': smallLayoutName,
-        'bigLayoutName': bigLayoutName,
-        'actionText': actionText,
-      };
+    'smallLayoutName': smallLayoutName,
+    'bigLayoutName': bigLayoutName,
+    'actionText': actionText,
+  };
 }
 
 class AndroidPersistentShortcutLayout {
@@ -35,9 +35,9 @@ class AndroidPersistentShortcutLayout {
 
   /// 转成常驻快捷通知布局配置。
   Map<String, Object?> toMap() => <String, Object?>{
-        'smallLayoutName': smallLayoutName,
-        'bigLayoutName': bigLayoutName,
-      };
+    'smallLayoutName': smallLayoutName,
+    'bigLayoutName': bigLayoutName,
+  };
 }
 
 class BeautyStyleInformation extends NotificationStyleInformation {
@@ -58,13 +58,13 @@ class BeautyStyleInformation extends NotificationStyleInformation {
   /// 转成美化通知样式配置。
   @override
   Map<String, Object?> toMap() => <String, Object?>{
-        'style': 'beauty',
-        'title': title,
-        'body': body,
-        'image': image,
-        'button': button,
-        'appIcon': appIcon,
-      };
+    'style': 'beauty',
+    'title': title,
+    'body': body,
+    'image': image,
+    'button': button,
+    'appIcon': appIcon,
+  };
 }
 
 class MediaStyleInformation extends NotificationStyleInformation {
@@ -75,9 +75,9 @@ class MediaStyleInformation extends NotificationStyleInformation {
   /// 转成媒体通知样式配置。
   @override
   Map<String, Object?> toMap() => <String, Object?>{
-        'style': 'media',
-        'image': image,
-      };
+    'style': 'media',
+    'image': image,
+  };
 }
 
 enum Priority { min, low, defaultPriority, high, max }
@@ -105,12 +105,12 @@ class AndroidNotificationDetails {
 
   /// 转成 Android 通知参数。
   Map<String, Object?> toMap() => <String, Object?>{
-        'channelId': channelId,
-        'channelName': channelName,
-        'channelDescription': channelDescription,
-        'priority': priority.index,
-        'importance': importance.index,
-        'replaceExisting': replaceExisting,
-        'styleInformation': styleInformation?.toMap(),
-      };
+    'channelId': channelId,
+    'channelName': channelName,
+    'channelDescription': channelDescription,
+    'priority': priority.index,
+    'importance': importance.index,
+    'replaceExisting': replaceExisting,
+    'styleInformation': styleInformation?.toMap(),
+  };
 }

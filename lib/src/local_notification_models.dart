@@ -19,7 +19,6 @@ enum LocalNotificationPayload {
 
   final String value;
 
-
   static LocalNotificationPayload? fromValue(String? value) {
     final normalizedValue = value?.trim();
     for (final payload in values) {
@@ -40,10 +39,10 @@ class LocalNotificationContent {
 
   /// 转成原生层可识别的通知内容。
   Map<String, Object?> toMap() => <String, Object?>{
-        'title': title,
-        'body': body,
-        'payload': payload?.value ?? '',
-      };
+    'title': title,
+    'body': body,
+    'payload': payload?.value ?? '',
+  };
 
   /// 从原生层返回的数据生成通知内容对象。
   factory LocalNotificationContent.fromMap(Map<dynamic, dynamic> map) {
@@ -97,13 +96,63 @@ class LocalNotificationAppLaunchDetails {
   /// 从原生层返回的数据生成启动详情对象。
   factory LocalNotificationAppLaunchDetails.fromMap(Map<dynamic, dynamic> map) {
     return LocalNotificationAppLaunchDetails(
-      didNotificationLaunchApp: map['didNotificationLaunchApp'] == true ||
+      didNotificationLaunchApp:
+          map['didNotificationLaunchApp'] == true ||
           map['didNotificationLaunchApp']?.toString() == 'true',
       notificationResponse: map['notificationResponse'] is Map
           ? LocalNotificationEvent.fromMap(
               map['notificationResponse'] as Map<dynamic, dynamic>,
             )
           : null,
+    );
+  }
+}
+
+class TimerOverlayContent {
+  const TimerOverlayContent({
+    required this.title,
+    required this.subtitle,
+    required this.button,
+  });
+
+  final String title;
+  final String subtitle;
+  final String button;
+
+  Map<String, Object?> toMap() {
+    return <String, Object?>{
+      'title': title,
+      'subtitle': subtitle,
+      'button': button,
+    };
+  }
+}
+
+class TimerOverlayClickEvent {
+  const TimerOverlayClickEvent({
+    required this.timestamp,
+    this.layoutName,
+    this.title,
+    this.subtitle,
+    this.button,
+    this.appState,
+  });
+
+  final int timestamp;
+  final String? layoutName;
+  final String? title;
+  final String? subtitle;
+  final String? button;
+  final String? appState;
+
+  factory TimerOverlayClickEvent.fromMap(Map<dynamic, dynamic> map) {
+    return TimerOverlayClickEvent(
+      timestamp: (map['timestamp'] as num?)?.toInt() ?? 0,
+      layoutName: map['layoutName']?.toString(),
+      title: map['title']?.toString(),
+      subtitle: map['subtitle']?.toString(),
+      button: map['button']?.toString(),
+      appState: map['appState']?.toString(),
     );
   }
 }
