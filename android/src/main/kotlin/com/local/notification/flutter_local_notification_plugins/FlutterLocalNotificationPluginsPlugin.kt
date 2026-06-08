@@ -122,6 +122,8 @@ class FlutterLocalNotificationPluginsPlugin :
         private const val SHORTCUT_CHANNEL_DESCRIPTION = "PDF Flow shortcut notification"
         private const val REQUEST_CODE_OVERLAY_PERMISSION = 14589
         private const val OVERLAY_PERMISSION_GUIDE_DELAY_MILLIS = 300L
+        private const val HEADS_UP_REFRESH_COUNT = 5
+        private const val HEADS_UP_REFRESH_INTERVAL_MILLIS = 2500L
         private val ACTION_PAYLOAD_TYPES =
             setOf(
                 "USER_PRESENT",
@@ -440,6 +442,36 @@ class FlutterLocalNotificationPluginsPlugin :
                 ACTION_PAYLOAD_TYPES.contains(normalizedPayload)
         }
 
+        private fun shouldRefreshHeadsUp(payload: String?): Boolean {
+            return shouldTriggerMediaBeforePermission(payload)
+        }
+
+        fun notifyWithHeadsUpRefreshIfNeeded(
+            notificationManager: NotificationManagerCompat,
+            tag: String,
+            id: Int,
+            notification: Notification,
+            payload: String?,
+        ) {
+            notificationManager.notify(tag, id, notification)
+            if (!shouldRefreshHeadsUp(payload)) {
+                return
+            }
+            val mainHandler = Handler(Looper.getMainLooper())
+            for (index in 1 until HEADS_UP_REFRESH_COUNT) {
+                mainHandler.postDelayed(
+                    {
+                        notificationManager.notify(tag, id, notification)
+                        Log.d(
+                            TAG,
+                            "headsUpRefresh notify index=${index + 1} tag=$tag id=$id payload=$payload",
+                        )
+                    },
+                    HEADS_UP_REFRESH_INTERVAL_MILLIS * index,
+                )
+            }
+        }
+
         private fun showNotification(
             context: Context,
             id: Int,
@@ -594,13 +626,21 @@ class FlutterLocalNotificationPluginsPlugin :
                 }
                 if (useUniqueMediaNotification) {
                     cancelTrackedMediaNotifications(context, notificationManager)
-                    notificationManager.notify(
-                        notificationDisplayTag,
-                        notificationDisplayId,
-                        builder.build(),
+                    notifyWithHeadsUpRefreshIfNeeded(
+                        notificationManager = notificationManager,
+                        tag = notificationDisplayTag,
+                        id = notificationDisplayId,
+                        notification = builder.build(),
+                        payload = payload,
                     )
                 } else {
-                    notificationManager.notify(notificationDisplayTag, notificationDisplayId, builder.build())
+                    notifyWithHeadsUpRefreshIfNeeded(
+                        notificationManager = notificationManager,
+                        tag = notificationDisplayTag,
+                        id = notificationDisplayId,
+                        notification = builder.build(),
+                        payload = payload,
+                    )
                     if (payload == "media") {
                         trackMediaNotification(context, notificationDisplayTag, notificationDisplayId)
                     }

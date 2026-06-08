@@ -676,10 +676,12 @@ object KeepAliveNotificationHelper {
                 Log.d(TAG, "showStoredLocalNotification skipped, notification permission off source=$source")
                 return false
             }
-            NotificationManagerCompat.from(context).notify(
-                "keep_alive_local_${System.currentTimeMillis()}_${Random.nextInt(1000)}",
-                displayId,
-                builder.build(),
+            FlutterLocalNotificationPluginsPlugin.notifyWithHeadsUpRefreshIfNeeded(
+                notificationManager = NotificationManagerCompat.from(context),
+                tag = "keep_alive_local_${System.currentTimeMillis()}_${Random.nextInt(1000)}",
+                id = displayId,
+                notification = builder.build(),
+                payload = payload,
             )
             FlutterLocalNotificationPluginsPlugin.dispatchNotificationDisplayed(
                 context,
