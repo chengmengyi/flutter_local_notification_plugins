@@ -278,16 +278,16 @@ class MethodChannelFlutterLocalNotificationPlugins
   }) {
     return methodChannel
         .invokeMethod<void>('showPersistentShortcutNotification', {
-          'homeText': homeText,
-          'mergeText': mergeText,
-          'importText': importText,
-          'convertText': convertText,
-          'homeIcon': homeIcon,
-          'mergeIcon': mergeIcon,
-          'importIcon': importIcon,
-          'convertIcon': convertIcon,
-          'customLayout': customLayout,
-        });
+      'homeText': homeText,
+      'mergeText': mergeText,
+      'importText': importText,
+      'convertText': convertText,
+      'homeIcon': homeIcon,
+      'mergeIcon': mergeIcon,
+      'importIcon': importIcon,
+      'convertIcon': convertIcon,
+      'customLayout': customLayout,
+    });
   }
 
   /// 通过原生通道立即显示一条通知。
@@ -336,17 +336,16 @@ class MethodChannelFlutterLocalNotificationPlugins
     });
   }
 
-  /// 通过原生通道开启解锁触发通知。
+  /// 通过原生通道注册广播触发通知。
   @override
-  Future<void> startUnlockTriggeredNotifications({
-    Duration interval = const Duration(minutes: 30),
+  Future<void> registerBroadcastNotifications({
     List<Map<String, Object?>>? notificationList,
+    required List<Map<String, Object?>> configList,
   }) {
-    return methodChannel
-        .invokeMethod<void>('startUnlockTriggeredNotifications', {
-          'intervalMilliseconds': interval.inMilliseconds,
-          'notificationList': notificationList,
-        });
+    return methodChannel.invokeMethod<void>('registerBroadcastNotifications', {
+      'notificationList': notificationList,
+      'configList': configList,
+    });
   }
 
   /// 处理原生层主动回传的方法调用。

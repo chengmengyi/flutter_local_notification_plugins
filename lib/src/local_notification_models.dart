@@ -39,10 +39,10 @@ class LocalNotificationContent {
 
   /// 转成原生层可识别的通知内容。
   Map<String, Object?> toMap() => <String, Object?>{
-    'title': title,
-    'body': body,
-    'payload': payload?.value ?? '',
-  };
+        'title': title,
+        'body': body,
+        'payload': payload?.value ?? '',
+      };
 
   /// 从原生层返回的数据生成通知内容对象。
   factory LocalNotificationContent.fromMap(Map<dynamic, dynamic> map) {
@@ -52,6 +52,21 @@ class LocalNotificationContent {
       payload: LocalNotificationPayload.fromValue(map['payload']?.toString()),
     );
   }
+}
+
+class BroadcastNotificationConfig {
+  const BroadcastNotificationConfig({
+    required this.payload,
+    required this.interval,
+  });
+
+  final LocalNotificationPayload payload;
+  final Duration interval;
+
+  Map<String, Object?> toMap() => <String, Object?>{
+        'payload': payload.value,
+        'intervalMilliseconds': interval.inMilliseconds,
+      };
 }
 
 class LocalNotificationEvent {
@@ -96,8 +111,7 @@ class LocalNotificationAppLaunchDetails {
   /// 从原生层返回的数据生成启动详情对象。
   factory LocalNotificationAppLaunchDetails.fromMap(Map<dynamic, dynamic> map) {
     return LocalNotificationAppLaunchDetails(
-      didNotificationLaunchApp:
-          map['didNotificationLaunchApp'] == true ||
+      didNotificationLaunchApp: map['didNotificationLaunchApp'] == true ||
           map['didNotificationLaunchApp']?.toString() == 'true',
       notificationResponse: map['notificationResponse'] is Map
           ? LocalNotificationEvent.fromMap(

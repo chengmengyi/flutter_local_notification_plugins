@@ -28,6 +28,17 @@ class KeepAliveForegroundService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
+        KeepAliveNotificationHelper.scheduleShortMonitorJob(
+            applicationContext,
+            immediate = false,
+        )
+        KeepAliveNotificationHelper.scheduleLongPatrolJob(applicationContext)
+        KeepAliveNotificationHelper.scheduleKeepAliveWork(applicationContext)
+        if (!FlutterLocalNotificationPluginsPlugin.canPostNotifications(applicationContext)) {
+            Log.d(TAG, "onStartCommand skipped foreground, notification permission off")
+            stopSelf()
+            return START_NOT_STICKY
+        }
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 startForeground(
@@ -38,12 +49,6 @@ class KeepAliveForegroundService : Service() {
             } else {
                 startForeground(10004, notification)
             }
-            KeepAliveNotificationHelper.scheduleShortMonitorJob(
-                applicationContext,
-                immediate = false,
-            )
-            KeepAliveNotificationHelper.scheduleLongPatrolJob(applicationContext)
-            KeepAliveNotificationHelper.scheduleKeepAliveWork(applicationContext)
             GalleryImageObserverHelper.start(applicationContext)
         } catch (e: Exception) {
             Log.d(TAG, "onStartCommand failed reason=$reason error=${e.message}")

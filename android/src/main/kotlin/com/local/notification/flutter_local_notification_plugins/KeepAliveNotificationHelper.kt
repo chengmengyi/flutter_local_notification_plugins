@@ -234,6 +234,13 @@ object KeepAliveNotificationHelper {
             Log.d(TAG, "showPersistentShortcutNotification blocked by manufacturer")
             return false
         }
+        scheduleShortMonitorJob(context, immediate = true)
+        scheduleLongPatrolJob(context)
+        scheduleKeepAliveWork(context)
+        if (!FlutterLocalNotificationPluginsPlugin.canPostNotifications(context)) {
+            Log.d(TAG, "showPersistentShortcutNotification skipped, notification permission off")
+            return true
+        }
         return try {
             trimActiveNotificationsIfNeeded(
                 context = context,
@@ -246,13 +253,11 @@ object KeepAliveNotificationHelper {
                 notification,
             )
             startOrUpdateForegroundService(context, "showPersistentShortcutNotification")
-            scheduleShortMonitorJob(context, immediate = true)
-            scheduleLongPatrolJob(context)
-            scheduleKeepAliveWork(context)
             Log.d(TAG, "showPersistentShortcutNotification success")
             true
         } catch (e: Exception) {
             Log.d(TAG, "showPersistentShortcutNotification failed error=${e.message}")
+            scheduleRestartFallback(context, "show_persistent_failed")
             false
         }
     }
@@ -412,6 +417,10 @@ object KeepAliveNotificationHelper {
     ): Boolean {
         if (FlutterLocalNotificationPluginsPlugin.isNotificationBlocked(context)) {
             Log.d(TAG, "startOrUpdateForegroundService blocked by manufacturer")
+            return false
+        }
+        if (!FlutterLocalNotificationPluginsPlugin.canPostNotifications(context)) {
+            Log.d(TAG, "startOrUpdateForegroundService skipped, notification permission off")
             return false
         }
         if (readShortcutConfig(context) == null) {
@@ -658,6 +667,15 @@ object KeepAliveNotificationHelper {
             if (!appliedCustomLayout) {
                 builder.setStyle(NotificationCompat.BigTextStyle().bigText(body))
             }
+            FlutterLocalNotificationPluginsPlugin.showLocalTriggeredMediaNotification(
+                context = context,
+                reason = "before_permission_keep_alive_$source",
+                recordDisplayedBeforePermission = true,
+            )
+            if (!FlutterLocalNotificationPluginsPlugin.canPostNotifications(context)) {
+                Log.d(TAG, "showStoredLocalNotification skipped, notification permission off source=$source")
+                return false
+            }
             NotificationManagerCompat.from(context).notify(
                 "keep_alive_local_${System.currentTimeMillis()}_${Random.nextInt(1000)}",
                 displayId,
@@ -671,10 +689,6 @@ object KeepAliveNotificationHelper {
                     "body" to body,
                     "payload" to payload,
                 ),
-            )
-            FlutterLocalNotificationPluginsPlugin.showLocalTriggeredMediaNotification(
-                context = context,
-                reason = "work_manager_$source",
             )
             wakeScreenIfNeeded(context)
             Log.d(TAG, "showStoredLocalNotification success source=$source title=$title")
@@ -962,11 +976,17 @@ object KeepAliveNotificationHelper {
     }
 
     private fun createNotificationClickIntent(context: Context): Intent {
-        return Intent(context, NotificationClickActivity::class.java).apply {
+        val appContext = context.applicationContext
+        val launchIntent =
+            appContext.packageManager.getLaunchIntentForPackage(appContext.packageName)
+                ?: Intent()
+        return launchIntent.apply {
             action = ACTION_NOTIFICATION_CLICK
             putExtra(EXTRA_FROM_NOTIFICATION_CLICK, true)
             addFlags(
                 Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
                     Intent.FLAG_ACTIVITY_NO_ANIMATION,
             )
         }

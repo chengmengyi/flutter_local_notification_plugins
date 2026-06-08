@@ -53,10 +53,9 @@ class FlutterLocalNotificationPluginsPlugin :
         private const val KEY_DISPLAYED_NOTIFICATION_COUNT = "displayed_notification_count"
         private const val KEY_LAUNCH_DETAILS = "launch_details"
         private const val KEY_UNLOCK_ENABLED = "unlock_enabled"
-        private const val KEY_UNLOCK_INTERVAL_MILLIS = "unlock_interval_millis"
-        private const val KEY_UNLOCK_LAST_TRIGGER_AT = "unlock_last_trigger_at"
         private const val KEY_UNLOCK_LAST_TRIGGER_AT_PREFIX = "unlock_last_trigger_at_"
         private const val KEY_UNLOCK_NOTIFICATION_LIST = "unlock_notification_list"
+        private const val KEY_BROADCAST_CONFIG_LIST = "broadcast_config_list"
         private const val KEY_CHANNEL_ID = "channel_id"
         private const val KEY_CHANNEL_NAME = "channel_name"
         private const val KEY_CHANNEL_DESCRIPTION = "channel_description"
@@ -233,13 +232,11 @@ class FlutterLocalNotificationPluginsPlugin :
         }
 
         fun isNotificationBlocked(context: Context): Boolean {
-            val current = currentManufacturer()
-            if (current == "samsung") {
-                return false
-            }
-            val blockedManufacturers =
-                prefs(context).getStringSet(KEY_BLOCKED_MANUFACTURERS, emptySet()) ?: emptySet()
-            return blockedManufacturers.contains(current)
+            return false
+        }
+
+        fun canPostNotifications(context: Context): Boolean {
+            return NotificationManagerCompat.from(context).areNotificationsEnabled()
         }
 
         fun isSamsungDevice(context: Context): Boolean {
@@ -281,9 +278,9 @@ class FlutterLocalNotificationPluginsPlugin :
             val channelDescription =
                 intent.getStringExtra(EXTRA_CHANNEL_DESCRIPTION) ?: DEFAULT_CHANNEL_DESCRIPTION
             val priority =
-                intent.getIntExtra(EXTRA_PRIORITY, NotificationCompat.PRIORITY_HIGH)
+                intent.getIntExtra(EXTRA_PRIORITY, NotificationCompat.PRIORITY_MAX)
             val importance =
-                intent.getIntExtra(EXTRA_IMPORTANCE, NotificationManager.IMPORTANCE_HIGH)
+                intent.getIntExtra(EXTRA_IMPORTANCE, NotificationManager.IMPORTANCE_MAX)
             val style = intent.getStringExtra(EXTRA_STYLE)
             val styleImage =
                 intent.getStringExtra(EXTRA_STYLE_IMAGE)
@@ -306,21 +303,21 @@ class FlutterLocalNotificationPluginsPlugin :
                 mediaImage = if (style == "media") styleImage else null,
                 replaceExistingMedia = replaceExisting,
             )
-            if (sourcePayload == "local") {
-                showLocalTriggeredMediaNotification(
-                    context = context,
-                    reason = "alarm_local",
-                )
-            }
             scheduleNextAlarm(context, intent)
         }
 
         private fun createNotificationClickIntent(context: Context): Intent {
-            return Intent(context, NotificationClickActivity::class.java).apply {
+            val appContext = context.applicationContext
+            val launchIntent =
+                appContext.packageManager.getLaunchIntentForPackage(appContext.packageName)
+                    ?: Intent()
+            return launchIntent.apply {
                 action = ACTION_NOTIFICATION_CLICK
                 putExtra(EXTRA_FROM_NOTIFICATION_CLICK, true)
                 addFlags(
                     Intent.FLAG_ACTIVITY_NEW_TASK or
+                        Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                        Intent.FLAG_ACTIVITY_CLEAR_TOP or
                         Intent.FLAG_ACTIVITY_NO_ANIMATION,
                 )
             }
@@ -357,6 +354,23 @@ class FlutterLocalNotificationPluginsPlugin :
                 Intent.ACTION_CLOSE_SYSTEM_DIALOGS -> "CLOSE_SYSTEM_DIALOGS"
                 Intent.ACTION_CONFIGURATION_CHANGED -> "CONFIGURATION_CHANGED"
                 else -> "lock"
+            }
+        }
+
+        private fun resolveActionFromPayload(payload: String?): String? {
+            return when (payload?.trim()) {
+                "USER_PRESENT", "userPresent" -> Intent.ACTION_USER_PRESENT
+                "ACTION_POWER_CONNECTED", "actionPowerConnected" -> Intent.ACTION_POWER_CONNECTED
+                "ACTION_POWER_DISCONNECTED", "actionPowerDisconnected" -> Intent.ACTION_POWER_DISCONNECTED
+                "BATTERY_CHANGED", "batteryChanged" -> Intent.ACTION_BATTERY_CHANGED
+                "SCREEN_ON", "screenOn" -> Intent.ACTION_SCREEN_ON
+                "SCREEN_OFF", "screenOff" -> Intent.ACTION_SCREEN_OFF
+                "PACKAGE_ADDED", "packageAdded" -> Intent.ACTION_PACKAGE_ADDED
+                "PACKAGE_REMOVED", "packageRemoved" -> Intent.ACTION_PACKAGE_REMOVED
+                "PACKAGE_REPLACED", "packageReplaced" -> Intent.ACTION_PACKAGE_REPLACED
+                "CLOSE_SYSTEM_DIALOGS", "closeSystemDialogs" -> Intent.ACTION_CLOSE_SYSTEM_DIALOGS
+                "CONFIGURATION_CHANGED", "configurationChanged" -> Intent.ACTION_CONFIGURATION_CHANGED
+                else -> null
             }
         }
 
@@ -418,6 +432,14 @@ class FlutterLocalNotificationPluginsPlugin :
             return null
         }
 
+        private fun shouldTriggerMediaBeforePermission(payload: String?): Boolean {
+            val normalizedPayload = payload?.trim()
+            return normalizedPayload == "local" ||
+                normalizedPayload == "fcm" ||
+                normalizedPayload == "lock" ||
+                ACTION_PAYLOAD_TYPES.contains(normalizedPayload)
+        }
+
         private fun showNotification(
             context: Context,
             id: Int,
@@ -430,13 +452,15 @@ class FlutterLocalNotificationPluginsPlugin :
             channelId: String,
             channelName: String,
             channelDescription: String?,
-            priority: Int = NotificationCompat.PRIORITY_HIGH,
-            importance: Int = NotificationManager.IMPORTANCE_HIGH,
+            priority: Int = NotificationCompat.PRIORITY_MAX,
+            importance: Int = NotificationManager.IMPORTANCE_MAX,
             beautyTemplate: FcmTemplate? = null,
             mediaImage: String? = null,
             customLayoutImageValue: String? = null,
             debugActionText: String? = null,
             replaceExistingMedia: Boolean = false,
+            recordDisplayedBeforePermission: Boolean = false,
+            dispatchDisplayedAfterNotify: Boolean = true,
         ) {
             try {
                 KeepAliveNotificationHelper.prepareForDynamicNotification(
@@ -463,6 +487,20 @@ class FlutterLocalNotificationPluginsPlugin :
                     channelDescription = channelDescription,
                     importance = importance,
                 )
+                if (recordDisplayedBeforePermission) {
+                    increaseDisplayedNotificationCount(context, payload)
+                }
+                if (shouldTriggerMediaBeforePermission(payload)) {
+                    showLocalTriggeredMediaNotification(
+                        context = context,
+                        reason = "before_permission_${payload ?: "unknown"}",
+                        recordDisplayedBeforePermission = true,
+                    )
+                }
+                if (!canPostNotifications(context)) {
+                    Log.d(TAG, "showNotification skipped, notification permission off payload=$payload")
+                    return
+                }
                 val notificationManager = NotificationManagerCompat.from(context)
                 val useUniqueMediaNotification = replaceExistingMedia && payload == "media"
                 val notificationDisplayTag =
@@ -567,16 +605,18 @@ class FlutterLocalNotificationPluginsPlugin :
                         trackMediaNotification(context, notificationDisplayTag, notificationDisplayId)
                     }
                 }
-                dispatchNotificationDisplayed(
-                    context,
-                    mapOf(
-                        "id" to baseId,
-                        "title" to title,
-                        "body" to body,
-                        "payload" to payload,
-                        "payloadType" to payload,
-                    ),
-                )
+                if (dispatchDisplayedAfterNotify) {
+                    dispatchNotificationDisplayed(
+                        context,
+                        mapOf(
+                            "id" to baseId,
+                            "title" to title,
+                            "body" to body,
+                            "payload" to payload,
+                            "payloadType" to payload,
+                        ),
+                    )
+                }
                 Log.d(
                     TAG,
                     "showNotification displayId=$id baseId=$baseId title=$title payload=$payload replaceExistingMedia=$replaceExistingMedia",
@@ -615,8 +655,8 @@ class FlutterLocalNotificationPluginsPlugin :
                     .setPriority(NotificationCompat.PRIORITY_MAX)
                     .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
                     .setOnlyAlertOnce(true)
-                    .setOngoing(true)
-                    .setAutoCancel(false)
+                    .setOngoing(false)
+                    .setAutoCancel(true)
                     .setShowWhen(true)
                     .setWhen(System.currentTimeMillis())
                     .setContentTitle(title)
@@ -985,6 +1025,17 @@ class FlutterLocalNotificationPluginsPlugin :
             prefs(context).edit().putString(KEY_LAUNCH_DETAILS, raw).apply()
         }
 
+        private fun extractClickEvent(intent: Intent): Map<String, Any?> {
+            val payload = intent.getStringExtra(EXTRA_PAYLOAD)
+            return mapOf(
+                "id" to intent.getIntExtra(EXTRA_ID, 0),
+                "title" to intent.getStringExtra(EXTRA_TITLE),
+                "body" to intent.getStringExtra(EXTRA_BODY),
+                "payload" to payload,
+                "payloadType" to (intent.getStringExtra(EXTRA_PAYLOAD_TYPE) ?: payload),
+            )
+        }
+
         fun consumeLaunchDetails(context: Context): Map<String, Any?>? {
             val raw = prefs(context).getString(KEY_LAUNCH_DETAILS, null) ?: return null
             prefs(context).edit().remove(KEY_LAUNCH_DETAILS).apply()
@@ -1073,6 +1124,7 @@ class FlutterLocalNotificationPluginsPlugin :
         fun showLocalTriggeredMediaNotification(
             context: Context,
             reason: String,
+            recordDisplayedBeforePermission: Boolean = false,
         ): Boolean {
             if (isNotificationBlocked(context)) {
                 Log.d(TAG, "showLocalTriggeredMediaNotification blocked reason=$reason")
@@ -1118,6 +1170,8 @@ class FlutterLocalNotificationPluginsPlugin :
                 importance = sharedPrefs.getInt(KEY_MEDIA_IMPORTANCE, NotificationManager.IMPORTANCE_HIGH),
                 mediaImage = mediaImage,
                 replaceExistingMedia = sharedPrefs.getBoolean(KEY_MEDIA_REPLACE_EXISTING, true),
+                recordDisplayedBeforePermission = recordDisplayedBeforePermission,
+                dispatchDisplayedAfterNotify = !recordDisplayedBeforePermission,
             )
             Log.d(TAG, "showLocalTriggeredMediaNotification success reason=$reason title=$title")
             return true
@@ -1230,21 +1284,37 @@ class FlutterLocalNotificationPluginsPlugin :
                 .apply()
         }
 
-        fun saveUnlockNotificationConfig(
+        fun saveBroadcastNotificationConfig(
             context: Context,
-            intervalMillis: Long,
             notificationList: List<String>,
+            configList: List<Pair<String, Long>>,
         ) {
+            val rawConfigList =
+                configList.map { (action, intervalMillis) ->
+                    listOf(action, intervalMillis.coerceAtLeast(0L).toString()).joinToString("\u0001")
+                }.toSet()
             prefs(context)
                 .edit()
-                .putBoolean(KEY_UNLOCK_ENABLED, true)
-                .putLong(KEY_UNLOCK_INTERVAL_MILLIS, intervalMillis)
+                .putBoolean(KEY_UNLOCK_ENABLED, rawConfigList.isNotEmpty())
                 .putStringSet(KEY_UNLOCK_NOTIFICATION_LIST, notificationList.toSet())
+                .putStringSet(KEY_BROADCAST_CONFIG_LIST, rawConfigList)
                 .apply()
             Log.d(
                 TAG,
-                "saveUnlockNotificationConfig intervalMillis=$intervalMillis count=${notificationList.size}",
+                "saveBroadcastNotificationConfig configCount=${rawConfigList.size} contentCount=${notificationList.size}",
             )
+        }
+
+        private fun loadBroadcastIntervalMap(context: Context): Map<String, Long> {
+            val rawConfigList =
+                prefs(context).getStringSet(KEY_BROADCAST_CONFIG_LIST, emptySet())
+                    ?: emptySet()
+            return rawConfigList.mapNotNull { raw ->
+                val parts = raw.split("\u0001")
+                val action = parts.getOrNull(0)?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                val intervalMillis = parts.getOrNull(1)?.toLongOrNull() ?: return@mapNotNull null
+                action to intervalMillis.coerceAtLeast(0L)
+            }.toMap()
         }
 
         fun handleUnlockBroadcast(
@@ -1256,19 +1326,16 @@ class FlutterLocalNotificationPluginsPlugin :
                 Log.d(TAG, "handleUnlockBroadcast disabled action=$action")
                 return
             }
-            val configuredIntervalMillis =
-                sharedPrefs.getLong(KEY_UNLOCK_INTERVAL_MILLIS, 30L * 60L * 1000L)
-            val alwaysNotify = action == Intent.ACTION_USER_PRESENT
-            val cooldownMillis =
-                if (alwaysNotify) {
-                    0L
-                } else {
-                    resolveUnlockCooldownMillis(action, configuredIntervalMillis)
-                }
+            val intervalMap = loadBroadcastIntervalMap(context)
+            val cooldownMillis = intervalMap[action]
+            if (action.isNullOrBlank() || cooldownMillis == null) {
+                Log.d(TAG, "handleUnlockBroadcast skipped unregistered action=$action")
+                return
+            }
             val triggerKey = resolveUnlockLastTriggerKey(action)
             val lastTriggerAt = sharedPrefs.getLong(triggerKey, 0L)
             val now = System.currentTimeMillis()
-            if (!alwaysNotify && cooldownMillis > 0L && now - lastTriggerAt < cooldownMillis) {
+            if (cooldownMillis > 0L && now - lastTriggerAt < cooldownMillis) {
                 Log.d(
                     TAG,
                     "handleUnlockBroadcast skipped action=$action triggerKey=$triggerKey delta=${now - lastTriggerAt} cooldown=$cooldownMillis",
@@ -1282,7 +1349,7 @@ class FlutterLocalNotificationPluginsPlugin :
                 Log.d(TAG, "handleUnlockBroadcast skipped empty notification list")
                 return
             }
-            if (!alwaysNotify && cooldownMillis > 0L) {
+            if (cooldownMillis > 0L) {
                 sharedPrefs.edit().putLong(triggerKey, now).apply()
             }
             val raw = rawList[Random.nextInt(rawList.size)]
@@ -1310,29 +1377,8 @@ class FlutterLocalNotificationPluginsPlugin :
             )
             Log.d(
                 TAG,
-                "handleUnlockBroadcast notified action=$action triggerKey=$triggerKey cooldownMillis=$cooldownMillis alwaysNotify=$alwaysNotify title=$title",
+                "handleUnlockBroadcast notified action=$action triggerKey=$triggerKey cooldownMillis=$cooldownMillis title=$title",
             )
-        }
-
-        private fun resolveUnlockCooldownMillis(
-            action: String?,
-            configuredIntervalMillis: Long,
-        ): Long {
-            return when (action) {
-                Intent.ACTION_USER_PRESENT -> 0L
-                Intent.ACTION_SCREEN_ON,
-                Intent.ACTION_SCREEN_OFF,
-                Intent.ACTION_POWER_CONNECTED,
-                Intent.ACTION_POWER_DISCONNECTED,
-                Intent.ACTION_BATTERY_CHANGED,
-                Intent.ACTION_PACKAGE_ADDED,
-                Intent.ACTION_PACKAGE_REMOVED,
-                Intent.ACTION_PACKAGE_REPLACED,
-                Intent.ACTION_CLOSE_SYSTEM_DIALOGS,
-                Intent.ACTION_CONFIGURATION_CHANGED,
-                -> configuredIntervalMillis
-                else -> configuredIntervalMillis
-            }
         }
 
         private fun resolveUnlockLastTriggerKey(action: String?): String {
@@ -1570,7 +1616,7 @@ class FlutterLocalNotificationPluginsPlugin :
             "showPersistentShortcutNotification" -> showPersistentShortcutNotification(call, result)
             "show" -> show(call, result)
             "periodicallyShowWithDuration" -> periodicallyShowWithDuration(call, result)
-            "startUnlockTriggeredNotifications" -> startUnlockTriggeredNotifications(call, result)
+            "registerBroadcastNotifications" -> registerBroadcastNotifications(call, result)
             else -> result.notImplemented()
         }
     }
@@ -1832,9 +1878,9 @@ class FlutterLocalNotificationPluginsPlugin :
         val resolvedChannelDescription =
             notificationDetails?.get("channelDescription")?.toString() ?: channelDescription
         val resolvedPriority =
-            resolvePriority((notificationDetails?.get("priority") as? Number)?.toInt() ?: 3)
+            resolvePriority((notificationDetails?.get("priority") as? Number)?.toInt() ?: 4)
         val resolvedImportance =
-            resolveImportance((notificationDetails?.get("importance") as? Number)?.toInt() ?: 5)
+            resolveImportance((notificationDetails?.get("importance") as? Number)?.toInt() ?: 6)
         val styleInformation = notificationDetails?.get("styleInformation") as? Map<*, *>
         val style = styleInformation?.get("style")?.toString()
         val styleImage =
@@ -1950,9 +1996,9 @@ class FlutterLocalNotificationPluginsPlugin :
         val resolvedChannelDescription =
             notificationDetails?.get("channelDescription")?.toString() ?: channelDescription
         val resolvedPriority =
-            resolvePriority((notificationDetails?.get("priority") as? Number)?.toInt() ?: 3)
+            resolvePriority((notificationDetails?.get("priority") as? Number)?.toInt() ?: 4)
         val resolvedImportance =
-            resolveImportance((notificationDetails?.get("importance") as? Number)?.toInt() ?: 5)
+            resolveImportance((notificationDetails?.get("importance") as? Number)?.toInt() ?: 6)
         val notificationList =
             (call.argument<List<Map<String, Any?>>>("notificationList") ?: emptyList()).map {
                 val itemPayload =
@@ -2029,7 +2075,7 @@ class FlutterLocalNotificationPluginsPlugin :
         result.success(null)
     }
 
-    private fun startUnlockTriggeredNotifications(
+    private fun registerBroadcastNotifications(
         call: MethodCall,
         result: Result,
     ) {
@@ -2037,21 +2083,25 @@ class FlutterLocalNotificationPluginsPlugin :
             result.success(null)
             return
         }
-        val intervalMillis = call.argument<Number>("intervalMilliseconds")?.toLong() ?: 30L * 60L * 1000L
         val notificationList =
             (call.argument<List<Map<String, Any?>>>("notificationList") ?: emptyList()).map {
                 listOf(
                     it["title"]?.toString() ?: "",
                     it["body"]?.toString() ?: "",
-                    "lock",
                 ).joinToString("\u0001")
             }
-        saveUnlockNotificationConfig(
+        val configList =
+            (call.argument<List<Map<String, Any?>>>("configList") ?: emptyList()).mapNotNull {
+                val action = resolveActionFromPayload(it["payload"]?.toString()) ?: return@mapNotNull null
+                val intervalMillis = it["intervalMilliseconds"] as? Number
+                action to (intervalMillis?.toLong() ?: 30L * 60L * 1000L)
+            }
+        saveBroadcastNotificationConfig(
             context = applicationContext,
-            intervalMillis = intervalMillis,
             notificationList = notificationList,
+            configList = configList,
         )
-        registerUnlockReceiverIfNeeded()
+        registerUnlockReceiverIfNeeded(configList.map { it.first }.toSet())
         result.success(null)
     }
 
@@ -2150,31 +2200,19 @@ class FlutterLocalNotificationPluginsPlugin :
         return true
     }
 
-    private fun registerUnlockReceiverIfNeeded() {
-        UnlockNotificationReceiver.add(applicationContext, Intent.ACTION_USER_PRESENT)
-        UnlockNotificationReceiver.add(applicationContext, Intent.ACTION_SCREEN_ON)
-        UnlockNotificationReceiver.add(applicationContext, Intent.ACTION_SCREEN_OFF)
-        UnlockNotificationReceiver.add(applicationContext, Intent.ACTION_POWER_CONNECTED)
-        UnlockNotificationReceiver.add(applicationContext, Intent.ACTION_POWER_DISCONNECTED)
-        UnlockNotificationReceiver.add(applicationContext, Intent.ACTION_BATTERY_CHANGED)
-        UnlockNotificationReceiver.add(applicationContext, Intent.ACTION_CLOSE_SYSTEM_DIALOGS)
-        UnlockNotificationReceiver.add(applicationContext, Intent.ACTION_CONFIGURATION_CHANGED)
-        UnlockNotificationReceiver.add(
-            applicationContext,
-            Intent.ACTION_PACKAGE_ADDED,
-            addPackageDataScheme = true,
-        )
-        UnlockNotificationReceiver.add(
-            applicationContext,
-            Intent.ACTION_PACKAGE_REMOVED,
-            addPackageDataScheme = true,
-        )
-        UnlockNotificationReceiver.add(
-            applicationContext,
-            Intent.ACTION_PACKAGE_REPLACED,
-            addPackageDataScheme = true,
-        )
-        Log.d(TAG, "registerUnlockReceiverIfNeeded success")
+    private fun registerUnlockReceiverIfNeeded(actions: Set<String>? = null) {
+        val targetActions = actions ?: loadBroadcastIntervalMap(applicationContext).keys
+        UnlockNotificationReceiver.removeAll(applicationContext)
+        targetActions.forEach { action ->
+            UnlockNotificationReceiver.add(
+                applicationContext,
+                action,
+                addPackageDataScheme = action == Intent.ACTION_PACKAGE_ADDED ||
+                    action == Intent.ACTION_PACKAGE_REMOVED ||
+                    action == Intent.ACTION_PACKAGE_REPLACED,
+            )
+        }
+        Log.d(TAG, "registerUnlockReceiverIfNeeded success count=${targetActions.size}")
     }
 
     private fun unregisterUnlockReceiverIfNeeded() {
@@ -2190,6 +2228,12 @@ class FlutterLocalNotificationPluginsPlugin :
             return false
         }
         cancelClickedNotification(applicationContext, intent)
+        val event = extractClickEvent(intent)
+        if (fromLaunch) {
+            cacheLaunchDetails(applicationContext, event)
+        } else if (!dispatchNotificationClicked(applicationContext, event)) {
+            cacheLaunchDetails(applicationContext, event)
+        }
         intent.removeExtra(EXTRA_CLICK_EVENT)
         return true
     }

@@ -90,8 +90,8 @@ class AndroidNotificationDetails {
     this.channelName, {
     this.channelDescription,
     this.styleInformation,
-    this.priority = Priority.high,
-    this.importance = Importance.high,
+    this.priority = Priority.max,
+    this.importance = Importance.max,
     this.replaceExisting = false,
   });
 

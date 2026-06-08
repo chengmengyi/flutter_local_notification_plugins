@@ -12,9 +12,6 @@ class FlutterLocalNotificationPlugins {
   static const Duration _defaultLocalNotificationInterval = Duration(
     minutes: 30,
   );
-  static const Duration _defaultUnlockNotificationInterval = Duration(
-    minutes: 30,
-  );
   static const Duration _defaultWorkManagerInterval = Duration(minutes: 60);
 
   static final FlutterLocalNotificationPlugins instance =
@@ -78,10 +75,10 @@ class FlutterLocalNotificationPlugins {
   }) {
     return FlutterLocalNotificationPluginsPlatform.instance
         .showProcessingOverlay(
-          taskId: taskId,
-          title: title,
-          progress: progress,
-        );
+      taskId: taskId,
+      title: title,
+      progress: progress,
+    );
   }
 
   /// 更新处理中的悬浮进度层。
@@ -92,10 +89,10 @@ class FlutterLocalNotificationPlugins {
   }) {
     return FlutterLocalNotificationPluginsPlatform.instance
         .updateProcessingOverlay(
-          taskId: taskId,
-          title: title,
-          progress: progress,
-        );
+      taskId: taskId,
+      title: title,
+      progress: progress,
+    );
   }
 
   /// 关闭处理中的悬浮进度层。
@@ -180,8 +177,8 @@ class FlutterLocalNotificationPlugins {
   }) {
     return FlutterLocalNotificationPluginsPlatform.instance
         .configureBlockedManufacturers(
-          manufacturers: manufacturers.map((value) => value.name).toList(),
-        );
+      manufacturers: manufacturers.map((value) => value.name).toList(),
+    );
   }
 
   /// 判断当前手机是否为三星。
@@ -199,7 +196,7 @@ class FlutterLocalNotificationPlugins {
 
   /// 获取通知点击拉起应用的启动信息。
   Future<LocalNotificationAppLaunchDetails>
-  getNotificationAppLaunchDetails() async {
+      getNotificationAppLaunchDetails() async {
     final result = await FlutterLocalNotificationPluginsPlatform.instance
         .getNotificationAppLaunchDetails();
     return LocalNotificationAppLaunchDetails.fromMap(result);
@@ -265,16 +262,16 @@ class FlutterLocalNotificationPlugins {
   }) {
     return FlutterLocalNotificationPluginsPlatform.instance
         .showPersistentShortcutNotification(
-          homeText: homeText,
-          mergeText: mergeText,
-          importText: importText,
-          convertText: convertText,
-          homeIcon: homeIcon,
-          mergeIcon: mergeIcon,
-          importIcon: importIcon,
-          convertIcon: convertIcon,
-          customLayout: customLayout?.toMap(),
-        );
+      homeText: homeText,
+      mergeText: mergeText,
+      importText: importText,
+      convertText: convertText,
+      homeIcon: homeIcon,
+      mergeIcon: mergeIcon,
+      importIcon: importIcon,
+      convertIcon: convertIcon,
+      customLayout: customLayout?.toMap(),
+    );
   }
 
   /// 立即显示一条本地通知。
@@ -311,30 +308,31 @@ class FlutterLocalNotificationPlugins {
   }) {
     return FlutterLocalNotificationPluginsPlatform.instance
         .periodicallyShowWithDuration(
-          id: id,
-          title: title,
-          body: body,
-          repeatDurationInterval: repeatDurationInterval,
-          payload: payload?.value,
-          mediaBackgroundImageName: mediaBackgroundImageName,
-          notificationDetails: notificationDetails?.toMap(),
-          notificationList: notificationList
-              ?.map((value) => value.toMap())
-              .toList(growable: false),
-        );
+      id: id,
+      title: title,
+      body: body,
+      repeatDurationInterval: repeatDurationInterval,
+      payload: payload?.value,
+      mediaBackgroundImageName: mediaBackgroundImageName,
+      notificationDetails: notificationDetails?.toMap(),
+      notificationList: notificationList
+          ?.map((value) => value.toMap())
+          .toList(growable: false),
+    );
   }
 
-  /// 开启解锁触发的通知提醒。
-  Future<void> startUnlockTriggeredNotifications({
-    Duration interval = _defaultUnlockNotificationInterval,
+  /// 注册广播触发的通知提醒。
+  Future<void> registerBroadcastNotifications({
     List<LocalNotificationContent>? notificationList,
+    required List<BroadcastNotificationConfig> configList,
   }) {
     return FlutterLocalNotificationPluginsPlatform.instance
-        .startUnlockTriggeredNotifications(
-          interval: interval,
-          notificationList: notificationList
-              ?.map((value) => value.toMap())
-              .toList(growable: false),
-        );
+        .registerBroadcastNotifications(
+      notificationList: notificationList
+          ?.map((value) => value.toMap())
+          .toList(growable: false),
+      configList:
+          configList.map((value) => value.toMap()).toList(growable: false),
+    );
   }
 }

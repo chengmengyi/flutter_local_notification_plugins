@@ -248,13 +248,13 @@ abstract class FlutterLocalNotificationPluginsPlatform
     );
   }
 
-  /// 开启解锁触发的通知提醒。
-  Future<void> startUnlockTriggeredNotifications({
-    Duration interval = const Duration(minutes: 30),
+  /// 注册广播触发的通知提醒。
+  Future<void> registerBroadcastNotifications({
     List<Map<String, Object?>>? notificationList,
+    required List<Map<String, Object?>> configList,
   }) {
     throw UnimplementedError(
-      'startUnlockTriggeredNotifications() has not been implemented.',
+      'registerBroadcastNotifications() has not been implemented.',
     );
   }
 }

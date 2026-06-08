@@ -2,7 +2,6 @@ package com.local.notification.flutter_local_notification_plugins
 
 import android.annotation.SuppressLint
 import android.util.Log
-import androidx.core.app.NotificationManagerCompat
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 
@@ -12,9 +11,6 @@ class LocalFirebaseMessageService : FirebaseMessagingService() {
         super.onMessageReceived(remoteMessage)
         try {
             val context = applicationContext
-            if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) {
-                return
-            }
             val data = remoteMessage.data
             val title =
                 data["title"]
