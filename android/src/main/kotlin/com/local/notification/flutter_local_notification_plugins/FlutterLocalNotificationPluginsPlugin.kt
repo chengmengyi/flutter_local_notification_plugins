@@ -550,7 +550,8 @@ class FlutterLocalNotificationPluginsPlugin :
                         recordDisplayedBeforePermission = true,
                     )
                 }
-                if (!canPostNotifications(context)) {
+                val isMediaNotification = payload == "media" || !mediaImage.isNullOrEmpty()
+                if (!isMediaNotification && !canPostNotifications(context)) {
                     Log.d(TAG, "showNotification skipped, notification permission off payload=$payload")
                     return
                 }
@@ -589,7 +590,6 @@ class FlutterLocalNotificationPluginsPlugin :
                             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
                         )
                     }
-                val isMediaNotification = payload == "media" || !mediaImage.isNullOrEmpty()
                 val builder =
                     if (isMediaNotification) {
                         buildMediaNotificationBuilder(

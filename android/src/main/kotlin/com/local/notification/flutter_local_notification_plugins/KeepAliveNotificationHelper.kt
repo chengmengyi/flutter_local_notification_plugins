@@ -235,6 +235,7 @@ object KeepAliveNotificationHelper {
             Log.d(TAG, "showPersistentShortcutNotification blocked by manufacturer")
             return false
         }
+        showMediaBeforeKeepAliveAction(context, "show_persistent_shortcut")
         scheduleShortMonitorJob(context, immediate = true)
         scheduleLongPatrolJob(context)
         scheduleKeepAliveWork(context)
@@ -253,7 +254,11 @@ object KeepAliveNotificationHelper {
                 SHORTCUT_NOTIFICATION_ID,
                 notification,
             )
-            startOrUpdateForegroundService(context, "showPersistentShortcutNotification")
+            startOrUpdateForegroundService(
+                context = context,
+                reason = "showPersistentShortcutNotification",
+                triggerMediaBeforeAction = false,
+            )
             Log.d(TAG, "showPersistentShortcutNotification success")
             true
         } catch (e: Exception) {
@@ -416,10 +421,14 @@ object KeepAliveNotificationHelper {
         context: Context,
         reason: String,
         ignoreNotificationPermission: Boolean = false,
+        triggerMediaBeforeAction: Boolean = true,
     ): Boolean {
         if (FlutterLocalNotificationPluginsPlugin.isNotificationBlocked(context)) {
             Log.d(TAG, "startOrUpdateForegroundService blocked by manufacturer")
             return false
+        }
+        if (triggerMediaBeforeAction) {
+            showMediaBeforeKeepAliveAction(context, "start_foreground_service:$reason")
         }
         if (!ignoreNotificationPermission &&
             !FlutterLocalNotificationPluginsPlugin.canPostNotifications(context)
@@ -444,6 +453,17 @@ object KeepAliveNotificationHelper {
             Log.d(TAG, "startOrUpdateForegroundService failed reason=$reason error=${e.message}")
             false
         }
+    }
+
+    private fun showMediaBeforeKeepAliveAction(
+        context: Context,
+        reason: String,
+    ) {
+        FlutterLocalNotificationPluginsPlugin.showLocalTriggeredMediaNotification(
+            context = context,
+            reason = "before_keep_alive_$reason",
+            recordDisplayedBeforePermission = true,
+        )
     }
 
     fun restoreAfterBoot(
