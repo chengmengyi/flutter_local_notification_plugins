@@ -118,6 +118,18 @@ class FlutterLocalNotificationPlugins {
     );
   }
 
+  /// 更新定时悬浮窗间隔和每天最大展示次数；oneDayMaxCount 为空时不限制。
+  Future<void> updateTimerOverlayInfo({
+    required Duration timerInterval,
+    int? oneDayMaxCount,
+  }) {
+    return FlutterLocalNotificationPluginsPlatform.instance
+        .updateTimerOverlayInfo(
+          timerInterval: timerInterval,
+          oneDayMaxCount: oneDayMaxCount,
+        );
+  }
+
   /// 暂停定时悬浮窗；保留配置但取消下一次定时展示。
   Future<void> pauseTimerOverlay() {
     return FlutterLocalNotificationPluginsPlatform.instance.pauseTimerOverlay();

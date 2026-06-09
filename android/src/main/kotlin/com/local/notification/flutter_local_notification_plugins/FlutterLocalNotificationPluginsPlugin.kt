@@ -1664,7 +1664,9 @@ class FlutterLocalNotificationPluginsPlugin :
                     result.success(false)
                     return
                 }
-                "setTimerOverlayInfo" -> {
+                "setTimerOverlayInfo",
+                "updateTimerOverlayInfo",
+                -> {
                     result.success(null)
                     return
                 }
@@ -1710,6 +1712,7 @@ class FlutterLocalNotificationPluginsPlugin :
             "updateProcessingOverlay" -> updateProcessingOverlay(call, result)
             "closeProcessingOverlay" -> closeProcessingOverlay(result)
             "setTimerOverlayInfo" -> setTimerOverlayInfo(call, result)
+            "updateTimerOverlayInfo" -> updateTimerOverlayInfo(call, result)
             "pauseTimerOverlay" -> {
                 TimerOverlayHelper.pause(applicationContext)
                 result.success(null)
@@ -1885,6 +1888,30 @@ class FlutterLocalNotificationPluginsPlugin :
             requestedIntervalMillis = requestedIntervalMillis,
             lastPdfSubtitleTemplate = lastPdfSubtitleTemplate,
             lastPdfButtonText = lastPdfButtonText,
+        )
+        result.success(null)
+    }
+
+    private fun updateTimerOverlayInfo(
+        call: MethodCall,
+        result: Result,
+    ) {
+        if (isNotificationBlocked(applicationContext)) {
+            result.success(null)
+            return
+        }
+        val requestedIntervalMillis =
+            call.argument<Number>("timerIntervalMilliseconds")?.toLong()
+        val oneDayMaxCount =
+            if (call.hasArgument("oneDayMaxCount")) {
+                call.argument<Number>("oneDayMaxCount")?.toInt()
+            } else {
+                null
+            }
+        TimerOverlayHelper.updateConfig(
+            context = applicationContext,
+            requestedIntervalMillis = requestedIntervalMillis,
+            oneDayMaxCount = oneDayMaxCount,
         )
         result.success(null)
     }

@@ -4,10 +4,12 @@ import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.content.pm.ApplicationInfo
 import android.util.Log
 import org.json.JSONArray
 import org.json.JSONObject
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlin.random.Random
 
 object TimerOverlayHelper {
@@ -23,6 +25,9 @@ object TimerOverlayHelper {
     private const val KEY_TIMER_OVERLAY_LAST_PDF_BUTTON_TEXT =
         "timer_overlay_last_pdf_button_text"
     private const val KEY_TIMER_OVERLAY_CLICK_EVENT = "timer_overlay_click_event"
+    private const val KEY_TIMER_OVERLAY_ONE_DAY_MAX_COUNT = "timer_overlay_one_day_max_count"
+    private const val KEY_TIMER_OVERLAY_DISPLAY_COUNT_DATE = "timer_overlay_display_count_date"
+    private const val KEY_TIMER_OVERLAY_DISPLAY_COUNT = "timer_overlay_display_count"
     private const val TIMER_OVERLAY_ACTION =
         "com.local.notification.flutter_local_notification_plugins.TIMER_OVERLAY"
     private const val TIMER_OVERLAY_REQUEST_CODE = 12006
@@ -76,6 +81,31 @@ object TimerOverlayHelper {
             .apply()
         scheduleNext(context)
         Log.d(TAG, "saveConfig success layoutName=$layoutName count=${rows.size}")
+    }
+
+    fun updateConfig(
+        context: Context,
+        requestedIntervalMillis: Long?,
+        oneDayMaxCount: Int?,
+    ) {
+        val editor =
+            prefs(context)
+                .edit()
+                .putLong(
+                    KEY_TIMER_OVERLAY_INTERVAL_MILLIS,
+                    resolveIntervalMillis(context, requestedIntervalMillis),
+                )
+        if (oneDayMaxCount == null) {
+            editor.remove(KEY_TIMER_OVERLAY_ONE_DAY_MAX_COUNT)
+        } else {
+            editor.putInt(KEY_TIMER_OVERLAY_ONE_DAY_MAX_COUNT, oneDayMaxCount.coerceAtLeast(0))
+        }
+        editor.apply()
+        scheduleNext(context)
+        Log.d(
+            TAG,
+            "updateConfig intervalMillis=${readIntervalMillis(context)} oneDayMaxCount=$oneDayMaxCount",
+        )
     }
 
     fun saveLastPdfInfo(
@@ -174,6 +204,11 @@ object TimerOverlayHelper {
             Log.d(TAG, "handleAlarm skipped, app foreground")
             return
         }
+        if (!canDisplayToday(context)) {
+            Log.d(TAG, "handleAlarm skipped, one day max count reached")
+            return
+        }
+        increaseTodayDisplayCount(context)
         TimerOverlayService.show(
             context = context,
             layoutName = config.layoutName,
@@ -231,6 +266,9 @@ object TimerOverlayHelper {
             .remove(KEY_TIMER_OVERLAY_LAST_PDF_SUBTITLE_TEMPLATE)
             .remove(KEY_TIMER_OVERLAY_LAST_PDF_BUTTON_TEXT)
             .remove(KEY_TIMER_OVERLAY_CLICK_EVENT)
+            .remove(KEY_TIMER_OVERLAY_ONE_DAY_MAX_COUNT)
+            .remove(KEY_TIMER_OVERLAY_DISPLAY_COUNT_DATE)
+            .remove(KEY_TIMER_OVERLAY_DISPLAY_COUNT)
             .apply()
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
         alarmManager?.cancel(createPendingIntent(context))
@@ -323,11 +361,6 @@ object TimerOverlayHelper {
         context: Context,
         requestedIntervalMillis: Long?,
     ): Long {
-        val isDebuggable =
-            context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
-        if (!isDebuggable) {
-            return DEFAULT_TIMER_OVERLAY_INTERVAL_MILLIS
-        }
         return requestedIntervalMillis
             ?.takeIf { it > 0L }
             ?: DEFAULT_TIMER_OVERLAY_INTERVAL_MILLIS
@@ -338,6 +371,38 @@ object TimerOverlayHelper {
             KEY_TIMER_OVERLAY_INTERVAL_MILLIS,
             DEFAULT_TIMER_OVERLAY_INTERVAL_MILLIS,
         ).takeIf { it > 0L } ?: DEFAULT_TIMER_OVERLAY_INTERVAL_MILLIS
+    }
+
+    private fun canDisplayToday(context: Context): Boolean {
+        val maxCount = prefs(context).getInt(KEY_TIMER_OVERLAY_ONE_DAY_MAX_COUNT, -1)
+        if (maxCount < 0) {
+            return true
+        }
+        return readTodayDisplayCount(context) < maxCount
+    }
+
+    private fun increaseTodayDisplayCount(context: Context) {
+        val today = todayKey()
+        val count = readTodayDisplayCount(context) + 1
+        prefs(context)
+            .edit()
+            .putString(KEY_TIMER_OVERLAY_DISPLAY_COUNT_DATE, today)
+            .putInt(KEY_TIMER_OVERLAY_DISPLAY_COUNT, count)
+            .apply()
+    }
+
+    private fun readTodayDisplayCount(context: Context): Int {
+        val sharedPrefs = prefs(context)
+        val today = todayKey()
+        val savedDate = sharedPrefs.getString(KEY_TIMER_OVERLAY_DISPLAY_COUNT_DATE, null)
+        if (savedDate != today) {
+            return 0
+        }
+        return sharedPrefs.getInt(KEY_TIMER_OVERLAY_DISPLAY_COUNT, 0)
+    }
+
+    private fun todayKey(): String {
+        return SimpleDateFormat("yyyyMMdd", Locale.US).format(Date())
     }
 
     private fun prefs(context: Context) =

@@ -91,6 +91,16 @@ abstract class FlutterLocalNotificationPluginsPlatform
     throw UnimplementedError('setTimerOverlayInfo() has not been implemented.');
   }
 
+  /// 更新定时悬浮窗信息。
+  Future<void> updateTimerOverlayInfo({
+    required Duration timerInterval,
+    int? oneDayMaxCount,
+  }) {
+    throw UnimplementedError(
+      'updateTimerOverlayInfo() has not been implemented.',
+    );
+  }
+
   /// 暂停定时悬浮窗；保留配置但取消下一次定时展示。
   Future<void> pauseTimerOverlay() {
     throw UnimplementedError('pauseTimerOverlay() has not been implemented.');

@@ -113,6 +113,18 @@ class MethodChannelFlutterLocalNotificationPlugins
     });
   }
 
+  /// 通过原生通道更新定时悬浮窗信息。
+  @override
+  Future<void> updateTimerOverlayInfo({
+    required Duration timerInterval,
+    int? oneDayMaxCount,
+  }) {
+    return methodChannel.invokeMethod<void>('updateTimerOverlayInfo', {
+      'timerIntervalMilliseconds': timerInterval.inMilliseconds,
+      'oneDayMaxCount': oneDayMaxCount,
+    });
+  }
+
   /// 通过原生通道暂停定时悬浮窗。
   @override
   Future<void> pauseTimerOverlay() {
