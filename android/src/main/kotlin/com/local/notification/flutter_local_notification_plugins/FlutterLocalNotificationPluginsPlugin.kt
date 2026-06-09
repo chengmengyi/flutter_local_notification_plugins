@@ -59,6 +59,7 @@ class FlutterLocalNotificationPluginsPlugin :
         private const val KEY_CHANNEL_ID = "channel_id"
         private const val KEY_CHANNEL_NAME = "channel_name"
         private const val KEY_CHANNEL_DESCRIPTION = "channel_description"
+        private const val KEY_NOTIFICATION_ICON_NAME = "notification_icon_name"
         private const val KEY_FCM_CHANNEL_ID = "fcm_channel_id"
         private const val KEY_FCM_CHANNEL_NAME = "fcm_channel_name"
         private const val KEY_FCM_CHANNEL_DESCRIPTION = "fcm_channel_description"
@@ -258,6 +259,26 @@ class FlutterLocalNotificationPluginsPlugin :
                 .edit()
                 .putStringSet(KEY_BLOCKED_MANUFACTURERS, normalizedManufacturers)
                 .apply()
+        }
+
+        fun resolveNotificationSmallIcon(context: Context): Int {
+            val iconName =
+                prefs(context).getString(KEY_NOTIFICATION_ICON_NAME, null)
+                    ?.trim()
+                    ?.takeUnless { it.isBlank() }
+            if (iconName != null) {
+                val drawableId = context.resources.getIdentifier(iconName, "drawable", context.packageName)
+                if (drawableId != 0) {
+                    return drawableId
+                }
+                val mipmapId = context.resources.getIdentifier(iconName, "mipmap", context.packageName)
+                if (mipmapId != 0) {
+                    return mipmapId
+                }
+                Log.d(TAG, "resolveNotificationSmallIcon missing iconName=$iconName, fallback launcher")
+            }
+            val icon = context.applicationInfo.icon
+            return if (icon != 0) icon else android.R.drawable.ic_dialog_info
         }
 
         fun showNotificationFromIntent(context: Context, intent: Intent) {
@@ -952,8 +973,7 @@ class FlutterLocalNotificationPluginsPlugin :
         }
 
         private fun resolveSmallIcon(context: Context): Int {
-            val icon = context.applicationInfo.icon
-            return if (icon != 0) icon else android.R.drawable.ic_dialog_info
+            return resolveNotificationSmallIcon(context)
         }
 
         private fun prefs(context: Context): SharedPreferences {
@@ -1315,13 +1335,20 @@ class FlutterLocalNotificationPluginsPlugin :
             channelId: String,
             channelName: String,
             channelDescription: String?,
+            iconName: String?,
         ) {
-            prefs(context)
-                .edit()
+            val editor =
+                prefs(context)
+                    .edit()
                 .putString(KEY_CHANNEL_ID, channelId)
                 .putString(KEY_CHANNEL_NAME, channelName)
                 .putString(KEY_CHANNEL_DESCRIPTION, channelDescription ?: DEFAULT_CHANNEL_DESCRIPTION)
-                .apply()
+            if (iconName.isNullOrBlank()) {
+                editor.remove(KEY_NOTIFICATION_ICON_NAME)
+            } else {
+                editor.putString(KEY_NOTIFICATION_ICON_NAME, iconName.trim())
+            }
+            editor.apply()
         }
 
         fun saveBroadcastNotificationConfig(
@@ -1869,6 +1896,7 @@ class FlutterLocalNotificationPluginsPlugin :
             channelId = channelId,
             channelName = channelName,
             channelDescription = channelDescription,
+            iconName = call.argument<String>("icon"),
         )
         KeepAliveNotificationHelper.scheduleShortMonitorJob(
             applicationContext,

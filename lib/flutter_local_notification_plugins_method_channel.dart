@@ -252,12 +252,14 @@ class MethodChannelFlutterLocalNotificationPlugins
     String channelId = 'default_notification_channel',
     String channelName = 'Notifications',
     String? channelDescription,
+    String? icon,
     Map<String, Object?>? customLayout,
   }) async {
     final result = await methodChannel.invokeMethod<bool>('initNotification', {
       'channelId': channelId,
       'channelName': channelName,
       'channelDescription': channelDescription,
+      'icon': icon,
       'customLayout': customLayout,
     });
     return result ?? false;
@@ -278,16 +280,16 @@ class MethodChannelFlutterLocalNotificationPlugins
   }) {
     return methodChannel
         .invokeMethod<void>('showPersistentShortcutNotification', {
-      'homeText': homeText,
-      'mergeText': mergeText,
-      'importText': importText,
-      'convertText': convertText,
-      'homeIcon': homeIcon,
-      'mergeIcon': mergeIcon,
-      'importIcon': importIcon,
-      'convertIcon': convertIcon,
-      'customLayout': customLayout,
-    });
+          'homeText': homeText,
+          'mergeText': mergeText,
+          'importText': importText,
+          'convertText': convertText,
+          'homeIcon': homeIcon,
+          'mergeIcon': mergeIcon,
+          'importIcon': importIcon,
+          'convertIcon': convertIcon,
+          'customLayout': customLayout,
+        });
   }
 
   /// 通过原生通道立即显示一条通知。

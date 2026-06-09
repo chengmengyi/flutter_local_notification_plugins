@@ -197,6 +197,7 @@ abstract class FlutterLocalNotificationPluginsPlatform
     String channelId = 'default_notification_channel',
     String channelName = 'Notifications',
     String? channelDescription,
+    String? icon,
     Map<String, Object?>? customLayout,
   }) {
     throw UnimplementedError('initNotification() has not been implemented.');

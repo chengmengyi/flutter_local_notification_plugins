@@ -973,8 +973,7 @@ object KeepAliveNotificationHelper {
     }
 
     private fun resolveSmallIcon(context: Context): Int {
-        val icon = context.applicationInfo.icon
-        return if (icon != 0) icon else android.R.drawable.ic_dialog_info
+        return FlutterLocalNotificationPluginsPlugin.resolveNotificationSmallIcon(context)
     }
 
     private fun createNotificationClickIntent(context: Context): Intent {
