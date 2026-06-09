@@ -1384,6 +1384,39 @@ class FlutterLocalNotificationPluginsPlugin :
             }.toMap()
         }
 
+        fun restoreBroadcastReceivers(context: Context) {
+            val targetActions = loadBroadcastIntervalMap(context).keys
+            UnlockNotificationReceiver.removeAll(context)
+            targetActions.forEach { action ->
+                UnlockNotificationReceiver.add(
+                    context,
+                    action,
+                    addPackageDataScheme = action == Intent.ACTION_PACKAGE_ADDED ||
+                        action == Intent.ACTION_PACKAGE_REMOVED ||
+                        action == Intent.ACTION_PACKAGE_REPLACED,
+                )
+            }
+            Log.d(TAG, "restoreBroadcastReceivers success count=${targetActions.size}")
+        }
+
+        fun restoreAfterBoot(
+            context: Context,
+            reason: String,
+        ) {
+            if (isNotificationBlocked(context)) {
+                Log.d(TAG, "restoreAfterBoot blocked reason=$reason")
+                return
+            }
+            Log.d(TAG, "restoreAfterBoot start reason=$reason")
+            restoreBroadcastReceivers(context)
+            KeepAliveNotificationHelper.restoreAfterBoot(
+                context = context,
+                reason = reason,
+            )
+            GalleryImageObserverHelper.start(context.applicationContext)
+            Log.d(TAG, "restoreAfterBoot end reason=$reason")
+        }
+
         fun handleUnlockBroadcast(
             context: Context,
             action: String?,

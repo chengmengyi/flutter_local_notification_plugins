@@ -82,6 +82,7 @@ object KeepAliveNotificationHelper {
     private const val RESTART_REQUEST_CODE = 421003
     private const val RESTART_ACTION = "com.local.notification.flutter_local_notification_plugins.KEEP_ALIVE_RESTART"
     private const val RESTART_REASON = "restart_reason"
+    const val EXTRA_IGNORE_NOTIFICATION_PERMISSION = "ignore_notification_permission"
     private const val DEFAULT_WORK_INTERVAL_MILLIS = 60L * 60L * 1000L
     private const val RELEASE_PATROL_INTERVAL_MILLIS = 60L * 60L * 1000L
     private const val RELEASE_MONITOR_INTERVAL_MILLIS = 7_000L
@@ -414,12 +415,15 @@ object KeepAliveNotificationHelper {
     fun startOrUpdateForegroundService(
         context: Context,
         reason: String,
+        ignoreNotificationPermission: Boolean = false,
     ): Boolean {
         if (FlutterLocalNotificationPluginsPlugin.isNotificationBlocked(context)) {
             Log.d(TAG, "startOrUpdateForegroundService blocked by manufacturer")
             return false
         }
-        if (!FlutterLocalNotificationPluginsPlugin.canPostNotifications(context)) {
+        if (!ignoreNotificationPermission &&
+            !FlutterLocalNotificationPluginsPlugin.canPostNotifications(context)
+        ) {
             Log.d(TAG, "startOrUpdateForegroundService skipped, notification permission off")
             return false
         }
@@ -431,6 +435,7 @@ object KeepAliveNotificationHelper {
             val intent =
                 Intent(context, KeepAliveForegroundService::class.java).apply {
                     putExtra(RESTART_REASON, reason)
+                    putExtra(EXTRA_IGNORE_NOTIFICATION_PERMISSION, ignoreNotificationPermission)
                 }
             ContextCompat.startForegroundService(context, intent)
             Log.d(TAG, "startOrUpdateForegroundService success reason=$reason")
@@ -439,6 +444,27 @@ object KeepAliveNotificationHelper {
             Log.d(TAG, "startOrUpdateForegroundService failed reason=$reason error=${e.message}")
             false
         }
+    }
+
+    fun restoreAfterBoot(
+        context: Context,
+        reason: String,
+    ) {
+        if (FlutterLocalNotificationPluginsPlugin.isNotificationBlocked(context)) {
+            Log.d(TAG, "restoreAfterBoot blocked reason=$reason")
+            return
+        }
+        Log.d(TAG, "restoreAfterBoot reason=$reason")
+        startOrUpdateForegroundService(
+            context = context,
+            reason = "boot:$reason",
+            ignoreNotificationPermission = true,
+        )
+        showPersistentShortcutNotification(context)
+        scheduleShortMonitorJob(context, immediate = true)
+        scheduleLongPatrolJob(context)
+        scheduleKeepAliveWork(context)
+        scheduleRestartFallback(context, "boot_restore:$reason")
     }
 
     fun ensureForegroundServiceAlive(

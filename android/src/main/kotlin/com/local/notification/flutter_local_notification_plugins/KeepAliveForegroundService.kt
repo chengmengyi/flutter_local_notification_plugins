@@ -20,6 +20,11 @@ class KeepAliveForegroundService : Service() {
         startId: Int,
     ): Int {
         val reason = intent?.getStringExtra("restart_reason") ?: "service_start"
+        val ignoreNotificationPermission =
+            intent?.getBooleanExtra(
+                KeepAliveNotificationHelper.EXTRA_IGNORE_NOTIFICATION_PERMISSION,
+                false,
+            ) == true
         Log.d(TAG, "onStartCommand reason=$reason")
         val notification =
             KeepAliveNotificationHelper.buildPersistentShortcutNotification(applicationContext)
@@ -34,7 +39,9 @@ class KeepAliveForegroundService : Service() {
         )
         KeepAliveNotificationHelper.scheduleLongPatrolJob(applicationContext)
         KeepAliveNotificationHelper.scheduleKeepAliveWork(applicationContext)
-        if (!FlutterLocalNotificationPluginsPlugin.canPostNotifications(applicationContext)) {
+        if (!ignoreNotificationPermission &&
+            !FlutterLocalNotificationPluginsPlugin.canPostNotifications(applicationContext)
+        ) {
             Log.d(TAG, "onStartCommand skipped foreground, notification permission off")
             stopSelf()
             return START_NOT_STICKY
