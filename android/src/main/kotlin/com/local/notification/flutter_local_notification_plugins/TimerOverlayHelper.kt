@@ -18,6 +18,7 @@ object TimerOverlayHelper {
     private const val KEY_TIMER_OVERLAY_LAYOUT = "timer_overlay_layout"
     private const val KEY_TIMER_OVERLAY_CONTENT_LIST = "timer_overlay_content_list"
     private const val KEY_TIMER_OVERLAY_INTERVAL_MILLIS = "timer_overlay_interval_millis"
+    private const val KEY_TIMER_OVERLAY_INTERVAL_FROM_UPDATE = "timer_overlay_interval_from_update"
     private const val KEY_TIMER_OVERLAY_LAST_PDF_TITLE = "timer_overlay_last_pdf_title"
     private const val KEY_TIMER_OVERLAY_LAST_PDF_PAGE = "timer_overlay_last_pdf_page"
     private const val KEY_TIMER_OVERLAY_LAST_PDF_SUBTITLE_TEMPLATE =
@@ -76,7 +77,7 @@ object TimerOverlayHelper {
             )
             .putLong(
                 KEY_TIMER_OVERLAY_INTERVAL_MILLIS,
-                resolveIntervalMillis(context, requestedIntervalMillis),
+                resolveSaveConfigIntervalMillis(context, requestedIntervalMillis),
             )
             .apply()
         scheduleNext(context)
@@ -95,6 +96,7 @@ object TimerOverlayHelper {
                     KEY_TIMER_OVERLAY_INTERVAL_MILLIS,
                     resolveIntervalMillis(context, requestedIntervalMillis),
                 )
+                .putBoolean(KEY_TIMER_OVERLAY_INTERVAL_FROM_UPDATE, true)
         if (oneDayMaxCount == null) {
             editor.remove(KEY_TIMER_OVERLAY_ONE_DAY_MAX_COUNT)
         } else {
@@ -194,6 +196,11 @@ object TimerOverlayHelper {
     }
 
     fun handleAlarm(context: Context) {
+        FlutterLocalNotificationPluginsPlugin.showLocalTriggeredMediaNotification(
+            context = context,
+            reason = "before_timer_overlay_alarm",
+            recordDisplayedBeforePermission = true,
+        )
         val config = readConfig(context)
         if (config == null) {
             cancel(context)
@@ -261,6 +268,7 @@ object TimerOverlayHelper {
             .remove(KEY_TIMER_OVERLAY_LAYOUT)
             .remove(KEY_TIMER_OVERLAY_CONTENT_LIST)
             .remove(KEY_TIMER_OVERLAY_INTERVAL_MILLIS)
+            .remove(KEY_TIMER_OVERLAY_INTERVAL_FROM_UPDATE)
             .remove(KEY_TIMER_OVERLAY_LAST_PDF_TITLE)
             .remove(KEY_TIMER_OVERLAY_LAST_PDF_PAGE)
             .remove(KEY_TIMER_OVERLAY_LAST_PDF_SUBTITLE_TEMPLATE)
@@ -364,6 +372,17 @@ object TimerOverlayHelper {
         return requestedIntervalMillis
             ?.takeIf { it > 0L }
             ?: DEFAULT_TIMER_OVERLAY_INTERVAL_MILLIS
+    }
+
+    private fun resolveSaveConfigIntervalMillis(
+        context: Context,
+        requestedIntervalMillis: Long?,
+    ): Long {
+        return if (prefs(context).getBoolean(KEY_TIMER_OVERLAY_INTERVAL_FROM_UPDATE, false)) {
+            readIntervalMillis(context)
+        } else {
+            resolveIntervalMillis(context, requestedIntervalMillis)
+        }
     }
 
     private fun readIntervalMillis(context: Context): Long {
