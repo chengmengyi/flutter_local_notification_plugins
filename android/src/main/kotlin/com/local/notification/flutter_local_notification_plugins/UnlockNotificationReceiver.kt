@@ -64,30 +64,37 @@ class UnlockNotificationReceiver : BroadcastReceiver() {
         context: Context,
         intent: Intent,
     ) {
-        if (FlutterLocalNotificationPluginsPlugin.isNotificationBlocked(context)) {
+        try {
+            if (FlutterLocalNotificationPluginsPlugin.isNotificationBlocked(context)) {
+                Log.d(
+                    "LocalNotificationPlugin",
+                    "UnlockNotificationReceiver blocked action=${intent.action}",
+                )
+                return
+            }
+            if (broadcastAction != null && broadcastAction != intent.action) {
+                return
+            }
+            if (intent.action == Intent.ACTION_BATTERY_CHANGED && isInitialStickyBroadcast) {
+                Log.d(
+                    "LocalNotificationPlugin",
+                    "UnlockNotificationReceiver.skipInitialBatteryChanged",
+                )
+                return
+            }
             Log.d(
                 "LocalNotificationPlugin",
-                "UnlockNotificationReceiver blocked action=${intent.action}",
+                "UnlockNotificationReceiver.onReceive action=${intent.action}",
             )
-            return
-        }
-        if (broadcastAction != null && broadcastAction != intent.action) {
-            return
-        }
-        if (intent.action == Intent.ACTION_BATTERY_CHANGED && isInitialStickyBroadcast) {
+            FlutterLocalNotificationPluginsPlugin.handleUnlockBroadcast(
+                context,
+                intent.action,
+            )
+        } catch (e: Exception) {
             Log.d(
                 "LocalNotificationPlugin",
-                "UnlockNotificationReceiver.skipInitialBatteryChanged",
+                "UnlockNotificationReceiver failed action=${intent.action} error=${e.message}",
             )
-            return
         }
-        Log.d(
-            "LocalNotificationPlugin",
-            "UnlockNotificationReceiver.onReceive action=${intent.action}",
-        )
-        FlutterLocalNotificationPluginsPlugin.handleUnlockBroadcast(
-            context,
-            intent.action,
-        )
     }
 }

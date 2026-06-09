@@ -306,7 +306,6 @@ class TimerOverlayService : Service() {
     }
 
     private fun resolveSmallIcon(): Int {
-        val icon = applicationInfo.icon
-        return if (icon != 0) icon else android.R.drawable.ic_dialog_info
+        return FlutterLocalNotificationPluginsPlugin.resolveNotificationSmallIcon(this)
     }
 }

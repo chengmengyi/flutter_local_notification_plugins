@@ -232,8 +232,9 @@ class ProcessingOverlayService : Service() {
                 PixelFormat.TRANSLUCENT,
             ).apply {
                 gravity = Gravity.TOP or Gravity.START
-                x = dpToPx(10)
-                y = resolveOverlayMinY()
+                x = (resources.displayMetrics.widthPixels - resolveOverlayWidthPx() - dpToPx(10))
+                    .coerceAtLeast(0)
+                y = dpToPx(100).coerceAtLeast(resolveOverlayMinY())
             }
         attachOverlayInteractions(rootView, params)
         try {
@@ -563,12 +564,7 @@ class ProcessingOverlayService : Service() {
     }
 
     private fun resolveSmallIcon(): Int {
-        val icon = applicationInfo.icon
-        return if (icon != 0) {
-            icon
-        } else {
-            android.R.drawable.ic_dialog_info
-        }
+        return FlutterLocalNotificationPluginsPlugin.resolveNotificationSmallIcon(this)
     }
 
     private fun extractState(intent: Intent?): OverlayState? {

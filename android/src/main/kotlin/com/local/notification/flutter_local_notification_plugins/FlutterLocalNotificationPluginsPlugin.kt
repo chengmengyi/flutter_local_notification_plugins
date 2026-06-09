@@ -1403,18 +1403,39 @@ class FlutterLocalNotificationPluginsPlugin :
             context: Context,
             reason: String,
         ) {
-            if (isNotificationBlocked(context)) {
-                Log.d(TAG, "restoreAfterBoot blocked reason=$reason")
-                return
+            try {
+                if (isNotificationBlocked(context)) {
+                    Log.d(TAG, "restoreAfterBoot blocked reason=$reason")
+                    return
+                }
+                Log.d(TAG, "restoreAfterBoot start reason=$reason")
+                runRestoreStep("broadcast_receivers") {
+                    restoreBroadcastReceivers(context)
+                }
+                runRestoreStep("keep_alive") {
+                    KeepAliveNotificationHelper.restoreAfterBoot(
+                        context = context,
+                        reason = reason,
+                    )
+                }
+                runRestoreStep("gallery_observer") {
+                    GalleryImageObserverHelper.start(context.applicationContext)
+                }
+                Log.d(TAG, "restoreAfterBoot end reason=$reason")
+            } catch (e: Exception) {
+                Log.d(TAG, "restoreAfterBoot failed reason=$reason error=${e.message}")
             }
-            Log.d(TAG, "restoreAfterBoot start reason=$reason")
-            restoreBroadcastReceivers(context)
-            KeepAliveNotificationHelper.restoreAfterBoot(
-                context = context,
-                reason = reason,
-            )
-            GalleryImageObserverHelper.start(context.applicationContext)
-            Log.d(TAG, "restoreAfterBoot end reason=$reason")
+        }
+
+        private fun runRestoreStep(
+            step: String,
+            block: () -> Unit,
+        ) {
+            try {
+                block()
+            } catch (e: Exception) {
+                Log.d(TAG, "restoreAfterBoot step=$step failed error=${e.message}")
+            }
         }
 
         fun handleUnlockBroadcast(

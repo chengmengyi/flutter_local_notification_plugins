@@ -11,10 +11,14 @@ class BootCompletedReceiver : BroadcastReceiver() {
         intent: Intent,
     ) {
         val action = intent.action ?: "unknown"
-        Log.d("LocalNotificationPlugin", "BootCompletedReceiver.onReceive action=$action")
-        FlutterLocalNotificationPluginsPlugin.restoreAfterBoot(
-            context = context,
-            reason = action,
-        )
+        try {
+            Log.d("LocalNotificationPlugin", "BootCompletedReceiver.onReceive action=$action")
+            FlutterLocalNotificationPluginsPlugin.restoreAfterBoot(
+                context = context,
+                reason = action,
+            )
+        } catch (e: Exception) {
+            Log.d("LocalNotificationPlugin", "BootCompletedReceiver failed action=$action error=${e.message}")
+        }
     }
 }

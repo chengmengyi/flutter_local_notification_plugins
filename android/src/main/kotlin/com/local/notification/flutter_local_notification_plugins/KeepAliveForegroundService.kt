@@ -20,77 +20,108 @@ class KeepAliveForegroundService : Service() {
         startId: Int,
     ): Int {
         val reason = intent?.getStringExtra("restart_reason") ?: "service_start"
-        val ignoreNotificationPermission =
-            intent?.getBooleanExtra(
-                KeepAliveNotificationHelper.EXTRA_IGNORE_NOTIFICATION_PERMISSION,
-                false,
-            ) == true
-        Log.d(TAG, "onStartCommand reason=$reason")
-        val notification =
-            KeepAliveNotificationHelper.buildPersistentShortcutNotification(applicationContext)
-        if (notification == null) {
-            Log.d(TAG, "onStartCommand skipped, notification config empty")
-            stopSelf()
-            return START_NOT_STICKY
-        }
-        KeepAliveNotificationHelper.scheduleShortMonitorJob(
-            applicationContext,
-            immediate = false,
-        )
-        KeepAliveNotificationHelper.scheduleLongPatrolJob(applicationContext)
-        KeepAliveNotificationHelper.scheduleKeepAliveWork(applicationContext)
-        if (!ignoreNotificationPermission &&
-            !FlutterLocalNotificationPluginsPlugin.canPostNotifications(applicationContext)
-        ) {
-            Log.d(TAG, "onStartCommand skipped foreground, notification permission off")
-            stopSelf()
-            return START_NOT_STICKY
-        }
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                startForeground(
-                    10004,
-                    notification,
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC,
-                )
-            } else {
-                startForeground(10004, notification)
+            val ignoreNotificationPermission =
+                intent?.getBooleanExtra(
+                    KeepAliveNotificationHelper.EXTRA_IGNORE_NOTIFICATION_PERMISSION,
+                    false,
+                ) == true
+            Log.d(TAG, "onStartCommand reason=$reason")
+            val notification =
+                KeepAliveNotificationHelper.buildPersistentShortcutNotification(applicationContext)
+            if (notification == null) {
+                Log.d(TAG, "onStartCommand skipped, notification config empty")
+                stopSelf()
+                return START_NOT_STICKY
             }
-            GalleryImageObserverHelper.start(applicationContext)
+            runServiceStep("schedule_short_monitor") {
+                KeepAliveNotificationHelper.scheduleShortMonitorJob(
+                    applicationContext,
+                    immediate = false,
+                )
+            }
+            runServiceStep("schedule_long_patrol") {
+                KeepAliveNotificationHelper.scheduleLongPatrolJob(applicationContext)
+            }
+            runServiceStep("schedule_work_manager") {
+                KeepAliveNotificationHelper.scheduleKeepAliveWork(applicationContext)
+            }
+            if (!ignoreNotificationPermission &&
+                !FlutterLocalNotificationPluginsPlugin.canPostNotifications(applicationContext)
+            ) {
+                Log.d(TAG, "onStartCommand skipped foreground, notification permission off")
+                stopSelf()
+                return START_NOT_STICKY
+            }
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    startForeground(
+                        10004,
+                        notification,
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC,
+                    )
+                } else {
+                    startForeground(10004, notification)
+                }
+                GalleryImageObserverHelper.start(applicationContext)
+            } catch (e: Exception) {
+                Log.d(TAG, "onStartCommand failed reason=$reason error=${e.message}")
+                KeepAliveNotificationHelper.scheduleRestartFallback(
+                    applicationContext,
+                    "service_start_failed:$reason",
+                )
+            }
+            return START_STICKY
         } catch (e: Exception) {
-            Log.d(TAG, "onStartCommand failed reason=$reason error=${e.message}")
-            KeepAliveNotificationHelper.scheduleRestartFallback(
-                applicationContext,
-                "service_start_failed:$reason",
-            )
+            Log.d(TAG, "onStartCommand fatal reason=$reason error=${e.message}")
+            stopSelf()
+            return START_NOT_STICKY
         }
-        return START_STICKY
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
-        Log.d(TAG, "onTaskRemoved")
-        KeepAliveNotificationHelper.scheduleRestartFallback(
-            applicationContext,
-            "task_removed",
-        )
-        KeepAliveNotificationHelper.scheduleShortMonitorJob(
-            applicationContext,
-            immediate = true,
-        )
+        try {
+            Log.d(TAG, "onTaskRemoved")
+            KeepAliveNotificationHelper.scheduleRestartFallback(
+                applicationContext,
+                "task_removed",
+            )
+            KeepAliveNotificationHelper.scheduleShortMonitorJob(
+                applicationContext,
+                immediate = true,
+            )
+        } catch (e: Exception) {
+            Log.d(TAG, "onTaskRemoved failed error=${e.message}")
+        }
         super.onTaskRemoved(rootIntent)
     }
 
     override fun onDestroy() {
-        Log.d(TAG, "onDestroy")
-        GalleryImageObserverHelper.stop(applicationContext)
-        KeepAliveNotificationHelper.scheduleRestartFallback(
-            applicationContext,
-            "service_destroyed",
-        )
-        KeepAliveNotificationHelper.scheduleShortMonitorJob(
-            applicationContext,
-            immediate = true,
-        )
+        try {
+            Log.d(TAG, "onDestroy")
+            GalleryImageObserverHelper.stop(applicationContext)
+            KeepAliveNotificationHelper.scheduleRestartFallback(
+                applicationContext,
+                "service_destroyed",
+            )
+            KeepAliveNotificationHelper.scheduleShortMonitorJob(
+                applicationContext,
+                immediate = true,
+            )
+        } catch (e: Exception) {
+            Log.d(TAG, "onDestroy failed error=${e.message}")
+        }
         super.onDestroy()
+    }
+
+    private fun runServiceStep(
+        step: String,
+        block: () -> Unit,
+    ) {
+        try {
+            block()
+        } catch (e: Exception) {
+            Log.d(TAG, "onStartCommand step=$step failed error=${e.message}")
+        }
     }
 }

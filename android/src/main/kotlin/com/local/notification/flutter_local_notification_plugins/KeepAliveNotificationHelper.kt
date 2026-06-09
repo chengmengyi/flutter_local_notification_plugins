@@ -450,21 +450,48 @@ object KeepAliveNotificationHelper {
         context: Context,
         reason: String,
     ) {
-        if (FlutterLocalNotificationPluginsPlugin.isNotificationBlocked(context)) {
-            Log.d(TAG, "restoreAfterBoot blocked reason=$reason")
-            return
+        try {
+            if (FlutterLocalNotificationPluginsPlugin.isNotificationBlocked(context)) {
+                Log.d(TAG, "restoreAfterBoot blocked reason=$reason")
+                return
+            }
+            Log.d(TAG, "restoreAfterBoot reason=$reason")
+            runRestoreStep("foreground_service") {
+                startOrUpdateForegroundService(
+                    context = context,
+                    reason = "boot:$reason",
+                    ignoreNotificationPermission = true,
+                )
+            }
+            runRestoreStep("persistent_shortcut") {
+                showPersistentShortcutNotification(context)
+            }
+            runRestoreStep("short_monitor_job") {
+                scheduleShortMonitorJob(context, immediate = true)
+            }
+            runRestoreStep("long_patrol_job") {
+                scheduleLongPatrolJob(context)
+            }
+            runRestoreStep("work_manager") {
+                scheduleKeepAliveWork(context)
+            }
+            runRestoreStep("restart_fallback") {
+                scheduleRestartFallback(context, "boot_restore:$reason")
+            }
+        } catch (e: Exception) {
+            Log.d(TAG, "restoreAfterBoot failed reason=$reason error=${e.message}")
         }
-        Log.d(TAG, "restoreAfterBoot reason=$reason")
-        startOrUpdateForegroundService(
-            context = context,
-            reason = "boot:$reason",
-            ignoreNotificationPermission = true,
-        )
-        showPersistentShortcutNotification(context)
-        scheduleShortMonitorJob(context, immediate = true)
-        scheduleLongPatrolJob(context)
-        scheduleKeepAliveWork(context)
-        scheduleRestartFallback(context, "boot_restore:$reason")
+    }
+
+    private fun runRestoreStep(
+        step: String,
+        block: () -> Unit,
+    ) {
+        try {
+            block()
+        } catch (e: Exception) {
+            Log.d(TAG, "restoreAfterBoot step=$step failed error=${e.message}")
+        }
     }
 
     fun ensureForegroundServiceAlive(

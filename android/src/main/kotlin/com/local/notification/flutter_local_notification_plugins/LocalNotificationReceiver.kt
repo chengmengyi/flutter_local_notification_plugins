@@ -10,11 +10,15 @@ class LocalNotificationReceiver : BroadcastReceiver() {
         context: Context,
         intent: Intent,
     ) {
-        if (FlutterLocalNotificationPluginsPlugin.isNotificationBlocked(context)) {
-            Log.d("LocalNotificationPlugin", "LocalNotificationReceiver blocked")
-            return
+        try {
+            if (FlutterLocalNotificationPluginsPlugin.isNotificationBlocked(context)) {
+                Log.d("LocalNotificationPlugin", "LocalNotificationReceiver blocked")
+                return
+            }
+            Log.d("LocalNotificationPlugin", "LocalNotificationReceiver.onReceive")
+            FlutterLocalNotificationPluginsPlugin.showNotificationFromIntent(context, intent)
+        } catch (e: Exception) {
+            Log.d("LocalNotificationPlugin", "LocalNotificationReceiver failed error=${e.message}")
         }
-        Log.d("LocalNotificationPlugin", "LocalNotificationReceiver.onReceive")
-        FlutterLocalNotificationPluginsPlugin.showNotificationFromIntent(context, intent)
     }
 }
