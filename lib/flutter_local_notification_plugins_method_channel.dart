@@ -100,6 +100,8 @@ class MethodChannelFlutterLocalNotificationPlugins
   Future<void> setTimerOverlayInfo({
     required String layoutName,
     required List<Map<String, Object?>> contentList,
+    String? layoutName2,
+    List<Map<String, Object?>>? contentList2,
     required String lastPdfSubtitleTemplate,
     required String lastPdfButtonText,
     Duration timerInterval = const Duration(minutes: 20),
@@ -107,6 +109,8 @@ class MethodChannelFlutterLocalNotificationPlugins
     return methodChannel.invokeMethod<void>('setTimerOverlayInfo', {
       'layoutName': layoutName,
       'contentList': contentList,
+      'layoutName2': layoutName2,
+      'contentList2': contentList2,
       'lastPdfSubtitleTemplate': lastPdfSubtitleTemplate,
       'lastPdfButtonText': lastPdfButtonText,
       'timerIntervalMilliseconds': timerInterval.inMilliseconds,

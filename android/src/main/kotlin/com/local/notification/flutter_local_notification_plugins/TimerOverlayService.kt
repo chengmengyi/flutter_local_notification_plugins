@@ -9,6 +9,7 @@ import android.app.NotificationManager
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.graphics.Paint
 import android.graphics.PixelFormat
 import android.os.Build
 import android.os.IBinder
@@ -33,6 +34,8 @@ class TimerOverlayService : Service() {
         private const val EXTRA_TITLE = "timer_overlay_title"
         private const val EXTRA_DESC = "timer_overlay_desc"
         private const val EXTRA_BUTTON = "timer_overlay_button"
+        private const val EXTRA_BUTTON_2 = "timer_overlay_button_2"
+        private const val EXTRA_USE_LAST_PDF_INFO = "timer_overlay_use_last_pdf_info"
         private const val CHANNEL_ID = "timer_overlay_channel"
         private const val CHANNEL_NAME = "Timer Overlay"
         private const val NOTIFICATION_ID = 12007
@@ -43,6 +46,8 @@ class TimerOverlayService : Service() {
             title: String,
             desc: String,
             button: String,
+            button2: String?,
+            useLastPdfInfo: Boolean,
         ) {
             if (!ProcessingOverlayService.isPermissionGranted(context)) {
                 Log.d(TAG, "show skipped, overlay permission missing")
@@ -55,6 +60,8 @@ class TimerOverlayService : Service() {
                     putExtra(EXTRA_TITLE, title)
                     putExtra(EXTRA_DESC, desc)
                     putExtra(EXTRA_BUTTON, button)
+                    putExtra(EXTRA_BUTTON_2, button2)
+                    putExtra(EXTRA_USE_LAST_PDF_INFO, useLastPdfInfo)
                 }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 ContextCompat.startForegroundService(context, intent)
@@ -108,6 +115,8 @@ class TimerOverlayService : Service() {
             title = intent?.getStringExtra(EXTRA_TITLE).orEmpty(),
             desc = intent?.getStringExtra(EXTRA_DESC).orEmpty(),
             button = intent?.getStringExtra(EXTRA_BUTTON).orEmpty(),
+            button2 = intent?.getStringExtra(EXTRA_BUTTON_2),
+            useLastPdfInfo = intent?.getBooleanExtra(EXTRA_USE_LAST_PDF_INFO, true) != false,
         )
         ensureForegroundNotification()
         return START_NOT_STICKY
@@ -129,6 +138,8 @@ class TimerOverlayService : Service() {
         title: String,
         desc: String,
         button: String,
+        button2: String?,
+        useLastPdfInfo: Boolean,
     ) {
         removeOverlay()
         val layoutResId = resources.getIdentifier(layoutName, "layout", packageName)
@@ -152,10 +163,10 @@ class TimerOverlayService : Service() {
                     stopSelf()
                 }
             }
-        pendingDisplayContent = bindContent(view, title, desc, button)
+        pendingDisplayContent = bindContent(view, title, desc, button, button2, useLastPdfInfo)
         val params =
             WindowManager.LayoutParams(
-                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.WRAP_CONTENT,
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
@@ -187,6 +198,8 @@ class TimerOverlayService : Service() {
         title: String,
         desc: String,
         button: String,
+        button2: String?,
+        useLastPdfInfo: Boolean,
     ): TimerOverlayHelper.TimerOverlayDisplayContent {
         val appName = applicationInfo.loadLabel(packageManager).toString()
         val displayContent = TimerOverlayHelper.resolveDisplayContent(
@@ -194,6 +207,8 @@ class TimerOverlayService : Service() {
             title = title,
             desc = desc,
             button = button,
+            button2 = button2,
+            useLastPdfInfo = useLastPdfInfo,
         )
         findTextView(view, "app_name_text")?.text = appName
         findTextView(view, "title_text")?.text = displayContent.title
@@ -201,6 +216,11 @@ class TimerOverlayService : Service() {
         findTextView(view, "btn_text")?.let { buttonView ->
             buttonView.text = displayContent.button
             startButtonPulse(buttonView)
+        }
+        findTextView(view, "later_btn_text")?.let { laterButtonView ->
+            laterButtonView.text = displayContent.button2.orEmpty()
+            laterButtonView.paintFlags =
+                laterButtonView.paintFlags or Paint.UNDERLINE_TEXT_FLAG
         }
         findImageView(view, "icon_logo")?.let { logoView ->
             try {

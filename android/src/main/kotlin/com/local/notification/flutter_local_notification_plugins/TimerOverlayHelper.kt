@@ -17,6 +17,8 @@ object TimerOverlayHelper {
     private const val PREFS_NAME = "flutter_local_notification_plugins"
     private const val KEY_TIMER_OVERLAY_LAYOUT = "timer_overlay_layout"
     private const val KEY_TIMER_OVERLAY_CONTENT_LIST = "timer_overlay_content_list"
+    private const val KEY_TIMER_OVERLAY_LAYOUT_2 = "timer_overlay_layout_2"
+    private const val KEY_TIMER_OVERLAY_CONTENT_LIST_2 = "timer_overlay_content_list_2"
     private const val KEY_TIMER_OVERLAY_INTERVAL_MILLIS = "timer_overlay_interval_millis"
     private const val KEY_TIMER_OVERLAY_INTERVAL_FROM_UPDATE = "timer_overlay_interval_from_update"
     private const val KEY_TIMER_OVERLAY_LAST_PDF_TITLE = "timer_overlay_last_pdf_title"
@@ -39,31 +41,20 @@ object TimerOverlayHelper {
         context: Context,
         layoutName: String,
         contentList: List<Map<String, Any?>>,
+        layoutName2: String?,
+        contentList2: List<Map<String, Any?>>,
         requestedIntervalMillis: Long?,
         lastPdfSubtitleTemplate: String?,
         lastPdfButtonText: String?,
     ) {
-        val rows =
-            contentList.mapNotNull { item ->
-                val title = item["title"]?.toString()?.trim().orEmpty()
-                val desc =
-                    (
-                        item["subtitle"]
-                            ?: item["desc"]
-                    )?.toString()?.trim().orEmpty()
-                val button = item["button"]?.toString()?.trim().orEmpty()
-                if (title.isBlank() && desc.isBlank() && button.isBlank()) {
-                    null
-                } else {
-                    listOf(title, desc, button).joinToString(PART_SEPARATOR)
-                }
-            }
+        val rows = encodeContentRows(contentList)
+        val rows2 = encodeContentRows(contentList2)
         if (layoutName.isBlank() || rows.isEmpty()) {
             Log.d(TAG, "saveConfig skipped layoutName=$layoutName count=${rows.size}")
             cancel(context)
             return
         }
-        prefs(context)
+        val editor = prefs(context)
             .edit()
             .putString(KEY_TIMER_OVERLAY_LAYOUT, layoutName)
             .putString(KEY_TIMER_OVERLAY_CONTENT_LIST, JSONArray(rows).toString())
@@ -79,9 +70,18 @@ object TimerOverlayHelper {
                 KEY_TIMER_OVERLAY_INTERVAL_MILLIS,
                 resolveSaveConfigIntervalMillis(context, requestedIntervalMillis),
             )
-            .apply()
+        if (!layoutName2.isNullOrBlank() && rows2.isNotEmpty()) {
+            editor
+                .putString(KEY_TIMER_OVERLAY_LAYOUT_2, layoutName2.trim())
+                .putString(KEY_TIMER_OVERLAY_CONTENT_LIST_2, JSONArray(rows2).toString())
+        } else {
+            editor
+                .remove(KEY_TIMER_OVERLAY_LAYOUT_2)
+                .remove(KEY_TIMER_OVERLAY_CONTENT_LIST_2)
+        }
+        editor.apply()
         scheduleNext(context)
-        Log.d(TAG, "saveConfig success layoutName=$layoutName count=${rows.size}")
+        Log.d(TAG, "saveConfig success layoutName=$layoutName count=${rows.size} layoutName2=$layoutName2 count2=${rows2.size}")
     }
 
     fun updateConfig(
@@ -132,17 +132,20 @@ object TimerOverlayHelper {
         title: String,
         desc: String,
         button: String,
+        button2: String?,
+        useLastPdfInfo: Boolean,
     ): TimerOverlayDisplayContent {
-        val lastPdfInfo = maybeConsumeLastPdfInfo(context)
+        val lastPdfInfo = if (useLastPdfInfo) maybeConsumeLastPdfInfo(context) else null
         if (lastPdfInfo != null) {
             return TimerOverlayDisplayContent(
                 title = lastPdfInfo.title,
                 desc = lastPdfInfo.subtitle,
                 button = lastPdfInfo.button.takeIf { it.isNotBlank() } ?: button,
+                button2 = button2,
                 shouldClearLastPdfInfoAfterDisplay = true,
             )
         }
-        return TimerOverlayDisplayContent(title = title, desc = desc, button = button)
+        return TimerOverlayDisplayContent(title = title, desc = desc, button = button, button2 = button2)
     }
 
     fun clearLastPdfInfoAfterDisplay(context: Context) {
@@ -161,6 +164,7 @@ object TimerOverlayHelper {
                 "title" to content?.title,
                 "subtitle" to content?.desc,
                 "button" to content?.button,
+                "button2" to content?.button2,
                 "appState" to (
                     if (FlutterLocalNotificationPluginsPlugin.isHostActivityInForeground()) {
                         "foreground"
@@ -187,6 +191,7 @@ object TimerOverlayHelper {
                 "title" to json.optString("title").takeIf { it.isNotBlank() },
                 "subtitle" to json.optString("subtitle").takeIf { it.isNotBlank() },
                 "button" to json.optString("button").takeIf { it.isNotBlank() },
+                "button2" to json.optString("button2").takeIf { it.isNotBlank() },
                 "appState" to json.optString("appState").takeIf { it.isNotBlank() },
             )
         } catch (e: Exception) {
@@ -222,6 +227,8 @@ object TimerOverlayHelper {
             title = config.content.title,
             desc = config.content.desc,
             button = config.content.button,
+            button2 = config.content.button2,
+            useLastPdfInfo = config.useLastPdfInfo,
         )
     }
 
@@ -267,6 +274,8 @@ object TimerOverlayHelper {
             .edit()
             .remove(KEY_TIMER_OVERLAY_LAYOUT)
             .remove(KEY_TIMER_OVERLAY_CONTENT_LIST)
+            .remove(KEY_TIMER_OVERLAY_LAYOUT_2)
+            .remove(KEY_TIMER_OVERLAY_CONTENT_LIST_2)
             .remove(KEY_TIMER_OVERLAY_INTERVAL_MILLIS)
             .remove(KEY_TIMER_OVERLAY_INTERVAL_FROM_UPDATE)
             .remove(KEY_TIMER_OVERLAY_LAST_PDF_TITLE)
@@ -292,17 +301,45 @@ object TimerOverlayHelper {
         if (rows.isEmpty()) {
             return null
         }
-        val raw = rows[Random.nextInt(rows.size)]
+        val layoutName2 = sharedPrefs.getString(KEY_TIMER_OVERLAY_LAYOUT_2, null)
+            ?.takeUnless { it.isBlank() }
+        val rows2 = readContentRows(sharedPrefs.getString(KEY_TIMER_OVERLAY_CONTENT_LIST_2, null))
+        val useSecondLayout = layoutName2 != null && rows2.isNotEmpty() && Random.nextBoolean()
+        val raw = if (useSecondLayout) {
+            rows2[Random.nextInt(rows2.size)]
+        } else {
+            rows[Random.nextInt(rows.size)]
+        }
         val parts = raw.split(PART_SEPARATOR)
         return TimerOverlayConfig(
-            layoutName = layoutName,
+            layoutName = if (useSecondLayout) layoutName2 ?: layoutName else layoutName,
             content =
                 TimerOverlayContent(
                     title = parts.getOrNull(0).orEmpty(),
                     desc = parts.getOrNull(1).orEmpty(),
                     button = parts.getOrNull(2).orEmpty(),
+                    button2 = parts.getOrNull(3).orEmpty(),
                 ),
+            useLastPdfInfo = !useSecondLayout,
         )
+    }
+
+    private fun encodeContentRows(contentList: List<Map<String, Any?>>): List<String> {
+        return contentList.mapNotNull { item ->
+            val title = item["title"]?.toString()?.trim().orEmpty()
+            val desc =
+                (
+                    item["subtitle"]
+                        ?: item["desc"]
+                )?.toString()?.trim().orEmpty()
+            val button = item["button"]?.toString()?.trim().orEmpty()
+            val button2 = item["button2"]?.toString()?.trim().orEmpty()
+            if (title.isBlank() && desc.isBlank() && button.isBlank() && button2.isBlank()) {
+                null
+            } else {
+                listOf(title, desc, button, button2).joinToString(PART_SEPARATOR)
+            }
+        }
     }
 
     private fun createPendingIntent(context: Context): PendingIntent {
@@ -430,12 +467,14 @@ object TimerOverlayHelper {
     private data class TimerOverlayConfig(
         val layoutName: String,
         val content: TimerOverlayContent,
+        val useLastPdfInfo: Boolean,
     )
 
     data class TimerOverlayDisplayContent(
         val title: String,
         val desc: String,
         val button: String,
+        val button2: String? = null,
         val shouldClearLastPdfInfoAfterDisplay: Boolean = false,
     )
 
@@ -443,6 +482,7 @@ object TimerOverlayHelper {
         val title: String,
         val desc: String,
         val button: String,
+        val button2: String,
     )
 
     private data class LastPdfInfo(

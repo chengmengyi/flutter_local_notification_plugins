@@ -84,6 +84,8 @@ abstract class FlutterLocalNotificationPluginsPlatform
   Future<void> setTimerOverlayInfo({
     required String layoutName,
     required List<Map<String, Object?>> contentList,
+    String? layoutName2,
+    List<Map<String, Object?>>? contentList2,
     required String lastPdfSubtitleTemplate,
     required String lastPdfButtonText,
     Duration timerInterval = const Duration(minutes: 20),

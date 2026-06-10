@@ -1875,6 +1875,8 @@ class FlutterLocalNotificationPluginsPlugin :
         }
         val layoutName = call.argument<String>("layoutName")?.trim().orEmpty()
         val contentList = call.argument<List<Map<String, Any?>>>("contentList") ?: emptyList()
+        val layoutName2 = call.argument<String>("layoutName2")?.trim()
+        val contentList2 = call.argument<List<Map<String, Any?>>>("contentList2") ?: emptyList()
         val requestedIntervalMillis =
             call.argument<Number>("timerIntervalMilliseconds")?.toLong()
         val lastPdfSubtitleTemplate =
@@ -1885,6 +1887,8 @@ class FlutterLocalNotificationPluginsPlugin :
             context = applicationContext,
             layoutName = layoutName,
             contentList = contentList,
+            layoutName2 = layoutName2,
+            contentList2 = contentList2,
             requestedIntervalMillis = requestedIntervalMillis,
             lastPdfSubtitleTemplate = lastPdfSubtitleTemplate,
             lastPdfButtonText = lastPdfButtonText,

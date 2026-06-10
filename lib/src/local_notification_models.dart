@@ -127,17 +127,20 @@ class TimerOverlayContent {
     required this.title,
     required this.subtitle,
     required this.button,
+    this.button2,
   });
 
   final String title;
   final String subtitle;
   final String button;
+  final String? button2;
 
   Map<String, Object?> toMap() {
     return <String, Object?>{
       'title': title,
       'subtitle': subtitle,
       'button': button,
+      'button2': button2,
     };
   }
 }
@@ -149,6 +152,7 @@ class TimerOverlayClickEvent {
     this.title,
     this.subtitle,
     this.button,
+    this.button2,
     this.appState,
   });
 
@@ -157,6 +161,7 @@ class TimerOverlayClickEvent {
   final String? title;
   final String? subtitle;
   final String? button;
+  final String? button2;
   final String? appState;
 
   factory TimerOverlayClickEvent.fromMap(Map<dynamic, dynamic> map) {
@@ -166,6 +171,7 @@ class TimerOverlayClickEvent {
       title: map['title']?.toString(),
       subtitle: map['subtitle']?.toString(),
       button: map['button']?.toString(),
+      button2: map['button2']?.toString(),
       appState: map['appState']?.toString(),
     );
   }
