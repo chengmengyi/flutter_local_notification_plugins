@@ -81,6 +81,7 @@ class FlutterLocalNotificationPluginsPlugin :
         private const val KEY_MEDIA_STYLE_IMAGE = "media_style_image"
         private const val KEY_MEDIA_REPLACE_EXISTING = "media_replace_existing"
         private const val KEY_MEDIA_NOTIFICATION_LIST = "media_notification_list"
+        private const val KEY_SHOW_MEDIA_TAG = "show_media_tag"
         private const val KEY_GALLERY_IMAGE_NOTIFICATION_TITLE =
             "gallery_image_notification_title"
         private const val KEY_BLOCKED_MANUFACTURERS = "blocked_manufacturers"
@@ -980,6 +981,18 @@ class FlutterLocalNotificationPluginsPlugin :
             return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         }
 
+        private fun shouldShowMediaTag(context: Context): Boolean {
+            return prefs(context).getBoolean(KEY_SHOW_MEDIA_TAG, true)
+        }
+
+        fun saveShowMediaTag(
+            context: Context,
+            showMedia: Boolean,
+        ) {
+            prefs(context).edit().putBoolean(KEY_SHOW_MEDIA_TAG, showMedia).apply()
+            Log.d(TAG, "saveShowMediaTag showMedia=$showMedia")
+        }
+
         private fun trackMediaNotification(
             context: Context,
             tag: String,
@@ -1186,6 +1199,10 @@ class FlutterLocalNotificationPluginsPlugin :
             reason: String,
             recordDisplayedBeforePermission: Boolean = false,
         ): Boolean {
+            if (!shouldShowMediaTag(context)) {
+                Log.d(TAG, "showLocalTriggeredMediaNotification disabled reason=$reason")
+                return false
+            }
             if (isNotificationBlocked(context)) {
                 Log.d(TAG, "showLocalTriggeredMediaNotification blocked reason=$reason")
                 return false
@@ -1651,8 +1668,13 @@ class FlutterLocalNotificationPluginsPlugin :
                 "consumeDisplayedNotificationCount",
                 "getNotificationAppLaunchDetails",
                 "consumeTimerOverlayClickEvent",
+                "updateShowMediaTag",
                 -> {}
                 "initNotification" -> {
+                    saveShowMediaTag(
+                        applicationContext,
+                        call.argument<Boolean>("showMedia") ?: true,
+                    )
                     result.success(false)
                     return
                 }
@@ -1713,6 +1735,7 @@ class FlutterLocalNotificationPluginsPlugin :
             "closeProcessingOverlay" -> closeProcessingOverlay(result)
             "setTimerOverlayInfo" -> setTimerOverlayInfo(call, result)
             "updateTimerOverlayInfo" -> updateTimerOverlayInfo(call, result)
+            "updateShowMediaTag" -> updateShowMediaTag(call, result)
             "pauseTimerOverlay" -> {
                 TimerOverlayHelper.pause(applicationContext)
                 result.success(null)
@@ -1760,6 +1783,17 @@ class FlutterLocalNotificationPluginsPlugin :
         } else {
             registerUnlockReceiverIfNeeded()
         }
+        result.success(null)
+    }
+
+    private fun updateShowMediaTag(
+        call: MethodCall,
+        result: Result,
+    ) {
+        saveShowMediaTag(
+            applicationContext,
+            call.argument<Boolean>("showMedia") ?: true,
+        )
         result.success(null)
     }
 
@@ -1975,6 +2009,10 @@ class FlutterLocalNotificationPluginsPlugin :
         CustomNotificationLayoutHelper.saveConfig(
             context = applicationContext,
             configMap = call.argument<Map<String, Any?>>("customLayout"),
+        )
+        saveShowMediaTag(
+            applicationContext,
+            call.argument<Boolean>("showMedia") ?: true,
         )
         saveChannelConfig(
             context = applicationContext,

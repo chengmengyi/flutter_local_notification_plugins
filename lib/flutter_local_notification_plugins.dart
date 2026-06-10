@@ -134,6 +134,13 @@ class FlutterLocalNotificationPlugins {
         );
   }
 
+  /// 更新是否在通知触发前显示媒体通知。
+  Future<void> updateShowMediaTag({required bool showMedia}) {
+    return FlutterLocalNotificationPluginsPlatform.instance.updateShowMediaTag(
+      showMedia: showMedia,
+    );
+  }
+
   /// 暂停定时悬浮窗；保留配置但取消下一次定时展示。
   Future<void> pauseTimerOverlay() {
     return FlutterLocalNotificationPluginsPlatform.instance.pauseTimerOverlay();
@@ -255,6 +262,7 @@ class FlutterLocalNotificationPlugins {
     String channelName = 'Notifications',
     String? channelDescription,
     String? icon,
+    bool showMedia = true,
     AndroidCustomNotificationLayout? customLayout,
   }) {
     return FlutterLocalNotificationPluginsPlatform.instance.initNotification(
@@ -262,6 +270,7 @@ class FlutterLocalNotificationPlugins {
       channelName: channelName,
       channelDescription: channelDescription,
       icon: icon,
+      showMedia: showMedia,
       customLayout: customLayout?.toMap(),
     );
   }
