@@ -45,7 +45,11 @@ abstract class FlutterLocalNotificationPluginsPlatform
   }
 
   /// 请求系统悬浮层权限。
-  Future<bool> requestOverlayPermission() {
+  Future<bool> requestOverlayPermission({
+    String? title,
+    String? desc,
+    String? overlayPermissionGuideLayout,
+  }) {
     throw UnimplementedError(
       'requestOverlayPermission() has not been implemented.',
     );

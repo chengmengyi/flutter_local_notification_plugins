@@ -54,10 +54,17 @@ class MethodChannelFlutterLocalNotificationPlugins
 
   /// 通过原生通道请求悬浮层权限。
   @override
-  Future<bool> requestOverlayPermission() async {
-    final result = await methodChannel.invokeMethod<bool>(
-      'requestOverlayPermission',
-    );
+  Future<bool> requestOverlayPermission({
+    String? title,
+    String? desc,
+    String? overlayPermissionGuideLayout,
+  }) async {
+    final result = await methodChannel
+        .invokeMethod<bool>('requestOverlayPermission', {
+          'title': title,
+          'desc': desc,
+          'overlayPermissionGuideLayout': overlayPermissionGuideLayout,
+        });
     return result ?? false;
   }
 

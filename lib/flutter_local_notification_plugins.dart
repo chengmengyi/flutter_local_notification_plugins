@@ -62,9 +62,17 @@ class FlutterLocalNotificationPlugins {
   }
 
   /// 请求系统悬浮层权限。
-  Future<bool> requestOverlayPermission() {
+  Future<bool> requestOverlayPermission({
+    required String title,
+    required String desc,
+    required String overlayPermissionGuideLayout,
+  }) {
     return FlutterLocalNotificationPluginsPlatform.instance
-        .requestOverlayPermission();
+        .requestOverlayPermission(
+          title: title,
+          desc: desc,
+          overlayPermissionGuideLayout: overlayPermissionGuideLayout,
+        );
   }
 
   /// 显示处理中的悬浮进度层。

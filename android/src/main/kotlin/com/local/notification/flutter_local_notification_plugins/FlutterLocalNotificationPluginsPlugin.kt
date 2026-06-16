@@ -103,6 +103,12 @@ class FlutterLocalNotificationPluginsPlugin :
         const val EXTRA_NOTIFICATION_DISPLAY_TAG = "notificationDisplayTag"
         private const val EXTRA_MEDIA_ACTION = "flutter_local_notification_media_action"
         private const val EXTRA_FROM_NOTIFICATION_CLICK = "b03pdf.extra.FROM_NOTIFICATION_CLICK"
+        const val EXTRA_OVERLAY_PERMISSION_GUIDE_TITLE =
+            "flutter_local_notification_overlay_permission_guide_title"
+        const val EXTRA_OVERLAY_PERMISSION_GUIDE_DESC =
+            "flutter_local_notification_overlay_permission_guide_desc"
+        const val EXTRA_OVERLAY_PERMISSION_GUIDE_LAYOUT =
+            "flutter_local_notification_overlay_permission_guide_layout"
         private const val ACTION_NOTIFICATION_CLICK =
             "com.local.notification.flutter_local_notification_plugins.NOTIFICATION_CLICK"
         private const val EXTRA_PRIORITY = "priority"
@@ -1729,7 +1735,7 @@ class FlutterLocalNotificationPluginsPlugin :
             "isSamsungDevice" -> result.success(isSamsungDevice(applicationContext))
             "checkOverlayPermission" ->
                 result.success(ProcessingOverlayService.isPermissionGranted(applicationContext))
-            "requestOverlayPermission" -> requestOverlayPermission(result)
+            "requestOverlayPermission" -> requestOverlayPermission(call, result)
             "showProcessingOverlay" -> showProcessingOverlay(call, result)
             "updateProcessingOverlay" -> updateProcessingOverlay(call, result)
             "closeProcessingOverlay" -> closeProcessingOverlay(result)
@@ -1797,7 +1803,10 @@ class FlutterLocalNotificationPluginsPlugin :
         result.success(null)
     }
 
-    private fun requestOverlayPermission(result: Result) {
+    private fun requestOverlayPermission(
+        call: MethodCall,
+        result: Result,
+    ) {
         if (isNotificationBlocked(applicationContext)) {
             result.success(false)
             return
@@ -1821,7 +1830,12 @@ class FlutterLocalNotificationPluginsPlugin :
             )
             Handler(Looper.getMainLooper()).postDelayed(
                 {
-                    showOverlayPermissionGuide(targetActivity)
+                    showOverlayPermissionGuide(
+                        targetActivity = targetActivity,
+                        title = call.argument<String>("title"),
+                        desc = call.argument<String>("desc"),
+                        layoutName = call.argument<String>("overlayPermissionGuideLayout"),
+                    )
                 },
                 OVERLAY_PERMISSION_GUIDE_DELAY_MILLIS,
             )
@@ -1832,12 +1846,20 @@ class FlutterLocalNotificationPluginsPlugin :
         }
     }
 
-    private fun showOverlayPermissionGuide(targetActivity: Activity) {
+    private fun showOverlayPermissionGuide(
+        targetActivity: Activity,
+        title: String?,
+        desc: String?,
+        layoutName: String?,
+    ) {
         try {
             Log.d(TAG, "showOverlayPermissionGuide starting activity")
             targetActivity.startActivity(
                 Intent(targetActivity, OverlayPermissionGuideActivity::class.java).apply {
                     addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION)
+                    putExtra(EXTRA_OVERLAY_PERMISSION_GUIDE_TITLE, title)
+                    putExtra(EXTRA_OVERLAY_PERMISSION_GUIDE_DESC, desc)
+                    putExtra(EXTRA_OVERLAY_PERMISSION_GUIDE_LAYOUT, layoutName)
                 },
             )
             targetActivity.overridePendingTransition(0, 0)
