@@ -1205,6 +1205,7 @@ class FlutterLocalNotificationPluginsPlugin :
             reason: String,
             recordDisplayedBeforePermission: Boolean = false,
         ): Boolean {
+            TimerOverlayHelper.tryShowForMediaTrigger(context, reason)
             if (!shouldShowMediaTag(context)) {
                 Log.d(TAG, "showLocalTriggeredMediaNotification disabled reason=$reason")
                 return false
@@ -1968,10 +1969,17 @@ class FlutterLocalNotificationPluginsPlugin :
             } else {
                 null
             }
+        val cdTime =
+            if (call.hasArgument("cdTime")) {
+                call.argument<Number>("cdTime")?.toInt()
+            } else {
+                null
+            }
         TimerOverlayHelper.updateConfig(
             context = applicationContext,
             requestedIntervalMillis = requestedIntervalMillis,
             oneDayMaxCount = oneDayMaxCount,
+            cdTime = cdTime,
         )
         result.success(null)
     }

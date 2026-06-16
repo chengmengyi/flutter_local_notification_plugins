@@ -101,6 +101,7 @@ abstract class FlutterLocalNotificationPluginsPlatform
   Future<void> updateTimerOverlayInfo({
     required Duration timerInterval,
     int? oneDayMaxCount,
+    int? cdTime,
   }) {
     throw UnimplementedError(
       'updateTimerOverlayInfo() has not been implemented.',

@@ -129,10 +129,12 @@ class MethodChannelFlutterLocalNotificationPlugins
   Future<void> updateTimerOverlayInfo({
     required Duration timerInterval,
     int? oneDayMaxCount,
+    int? cdTime,
   }) {
     return methodChannel.invokeMethod<void>('updateTimerOverlayInfo', {
       'timerIntervalMilliseconds': timerInterval.inMilliseconds,
       'oneDayMaxCount': oneDayMaxCount,
+      'cdTime': cdTime,
     });
   }
 

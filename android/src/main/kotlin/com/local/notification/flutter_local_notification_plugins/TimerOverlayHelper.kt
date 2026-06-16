@@ -31,10 +31,14 @@ object TimerOverlayHelper {
     private const val KEY_TIMER_OVERLAY_ONE_DAY_MAX_COUNT = "timer_overlay_one_day_max_count"
     private const val KEY_TIMER_OVERLAY_DISPLAY_COUNT_DATE = "timer_overlay_display_count_date"
     private const val KEY_TIMER_OVERLAY_DISPLAY_COUNT = "timer_overlay_display_count"
+    private const val KEY_TIMER_OVERLAY_CD_TIME_MINUTES = "timer_overlay_cd_time_minutes"
+    private const val KEY_TIMER_OVERLAY_LAST_DISPLAY_AT = "timer_overlay_last_display_at"
     private const val TIMER_OVERLAY_ACTION =
         "com.local.notification.flutter_local_notification_plugins.TIMER_OVERLAY"
     private const val TIMER_OVERLAY_REQUEST_CODE = 12006
     private const val DEFAULT_TIMER_OVERLAY_INTERVAL_MILLIS = 20L * 60L * 1000L
+    private const val DEFAULT_TIMER_OVERLAY_CD_TIME_MINUTES = 1
+    private const val MINUTE_MILLIS = 60L * 1000L
     private const val PART_SEPARATOR = "\u0001"
 
     fun saveConfig(
@@ -88,6 +92,7 @@ object TimerOverlayHelper {
         context: Context,
         requestedIntervalMillis: Long?,
         oneDayMaxCount: Int?,
+        cdTime: Int?,
     ) {
         val editor =
             prefs(context)
@@ -102,11 +107,15 @@ object TimerOverlayHelper {
         } else {
             editor.putInt(KEY_TIMER_OVERLAY_ONE_DAY_MAX_COUNT, oneDayMaxCount.coerceAtLeast(0))
         }
+        editor.putInt(
+            KEY_TIMER_OVERLAY_CD_TIME_MINUTES,
+            (cdTime ?: DEFAULT_TIMER_OVERLAY_CD_TIME_MINUTES).coerceAtLeast(0),
+        )
         editor.apply()
         scheduleNext(context)
         Log.d(
             TAG,
-            "updateConfig intervalMillis=${readIntervalMillis(context)} oneDayMaxCount=$oneDayMaxCount",
+            "updateConfig intervalMillis=${readIntervalMillis(context)} oneDayMaxCount=$oneDayMaxCount cdTime=${readCdTimeMinutes(context)}",
         )
     }
 
@@ -212,15 +221,44 @@ object TimerOverlayHelper {
             return
         }
         scheduleNext(context)
-        if (FlutterLocalNotificationPluginsPlugin.isHostActivityInForeground()) {
-            Log.d(TAG, "handleAlarm skipped, app foreground")
+        tryShowOverlay(context, config, "alarm")
+    }
+
+    fun tryShowForMediaTrigger(
+        context: Context,
+        reason: String,
+    ) {
+        val config = readConfig(context)
+        if (config == null) {
+            Log.d(TAG, "tryShowForMediaTrigger skipped, no config reason=$reason")
             return
+        }
+        tryShowOverlay(context, config, "media_trigger:$reason")
+    }
+
+    private fun tryShowOverlay(
+        context: Context,
+        config: TimerOverlayConfig,
+        source: String,
+    ): Boolean {
+        if (FlutterLocalNotificationPluginsPlugin.isHostActivityInForeground()) {
+            Log.d(TAG, "tryShowOverlay skipped, app foreground source=$source")
+            return false
         }
         if (!canDisplayToday(context)) {
-            Log.d(TAG, "handleAlarm skipped, one day max count reached")
-            return
+            Log.d(TAG, "tryShowOverlay skipped, one day max count reached source=$source")
+            return false
+        }
+        if (!canDisplayByCooldown(context)) {
+            Log.d(TAG, "tryShowOverlay skipped, cooldown source=$source")
+            return false
+        }
+        if (!ProcessingOverlayService.isPermissionGranted(context)) {
+            Log.d(TAG, "tryShowOverlay skipped, overlay permission missing source=$source")
+            return false
         }
         increaseTodayDisplayCount(context)
+        saveLastDisplayAt(context)
         TimerOverlayService.show(
             context = context,
             layoutName = config.layoutName,
@@ -230,6 +268,8 @@ object TimerOverlayHelper {
             button2 = config.content.button2,
             useLastPdfInfo = config.useLastPdfInfo,
         )
+        Log.d(TAG, "tryShowOverlay success source=$source")
+        return true
     }
 
     fun scheduleNext(context: Context) {
@@ -286,6 +326,8 @@ object TimerOverlayHelper {
             .remove(KEY_TIMER_OVERLAY_ONE_DAY_MAX_COUNT)
             .remove(KEY_TIMER_OVERLAY_DISPLAY_COUNT_DATE)
             .remove(KEY_TIMER_OVERLAY_DISPLAY_COUNT)
+            .remove(KEY_TIMER_OVERLAY_CD_TIME_MINUTES)
+            .remove(KEY_TIMER_OVERLAY_LAST_DISPLAY_AT)
             .apply()
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
         alarmManager?.cancel(createPendingIntent(context))
@@ -427,6 +469,29 @@ object TimerOverlayHelper {
             KEY_TIMER_OVERLAY_INTERVAL_MILLIS,
             DEFAULT_TIMER_OVERLAY_INTERVAL_MILLIS,
         ).takeIf { it > 0L } ?: DEFAULT_TIMER_OVERLAY_INTERVAL_MILLIS
+    }
+
+    private fun readCdTimeMinutes(context: Context): Int {
+        return prefs(context).getInt(
+            KEY_TIMER_OVERLAY_CD_TIME_MINUTES,
+            DEFAULT_TIMER_OVERLAY_CD_TIME_MINUTES,
+        ).coerceAtLeast(0)
+    }
+
+    private fun canDisplayByCooldown(context: Context): Boolean {
+        val lastDisplayAt = prefs(context).getLong(KEY_TIMER_OVERLAY_LAST_DISPLAY_AT, 0L)
+        if (lastDisplayAt <= 0L) {
+            return true
+        }
+        val cooldownMillis = readCdTimeMinutes(context) * MINUTE_MILLIS
+        return System.currentTimeMillis() - lastDisplayAt >= cooldownMillis
+    }
+
+    private fun saveLastDisplayAt(context: Context) {
+        prefs(context)
+            .edit()
+            .putLong(KEY_TIMER_OVERLAY_LAST_DISPLAY_AT, System.currentTimeMillis())
+            .apply()
     }
 
     private fun canDisplayToday(context: Context): Boolean {

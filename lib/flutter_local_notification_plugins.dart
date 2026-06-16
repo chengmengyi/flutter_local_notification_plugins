@@ -134,11 +134,13 @@ class FlutterLocalNotificationPlugins {
   Future<void> updateTimerOverlayInfo({
     required Duration timerInterval,
     int? oneDayMaxCount,
+    int? cdTime,
   }) {
     return FlutterLocalNotificationPluginsPlatform.instance
         .updateTimerOverlayInfo(
           timerInterval: timerInterval,
           oneDayMaxCount: oneDayMaxCount,
+          cdTime: cdTime,
         );
   }
 
