@@ -218,9 +218,15 @@ class TimerOverlayService : Service() {
             startButtonPulse(buttonView)
         }
         findTextView(view, "later_btn_text")?.let { laterButtonView ->
-            laterButtonView.text = displayContent.button2.orEmpty()
-            laterButtonView.paintFlags =
-                laterButtonView.paintFlags or Paint.UNDERLINE_TEXT_FLAG
+            val laterText = displayContent.button2?.takeUnless { it.isBlank() }
+            if (laterText == null) {
+                laterButtonView.visibility = View.GONE
+            } else {
+                laterButtonView.visibility = View.VISIBLE
+                laterButtonView.text = laterText
+                laterButtonView.paintFlags =
+                    laterButtonView.paintFlags or Paint.UNDERLINE_TEXT_FLAG
+            }
         }
         findImageView(view, "icon_logo")?.let { logoView ->
             try {
