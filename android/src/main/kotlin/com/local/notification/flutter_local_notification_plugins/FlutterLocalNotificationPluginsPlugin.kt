@@ -1115,6 +1115,33 @@ class FlutterLocalNotificationPluginsPlugin :
             )
         }
 
+        fun isLaunchedFromHistory(intent: Intent?): Boolean {
+            return intent != null &&
+                (intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) ==
+                Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY
+        }
+
+        private fun isNotificationClickIntent(intent: Intent?): Boolean {
+            return intent?.getBooleanExtra(EXTRA_CLICK_EVENT, false) == true &&
+                !isLaunchedFromHistory(intent)
+        }
+
+        fun clearLaunchDetails(context: Context) {
+            prefs(context).edit().remove(KEY_LAUNCH_DETAILS).apply()
+        }
+
+        fun resolveLaunchDetailsFromIntent(intent: Intent?): Map<String, Any?>? {
+            if (!isNotificationClickIntent(intent)) {
+                return null
+            }
+            val event = extractClickEvent(intent!!)
+            intent.removeExtra(EXTRA_CLICK_EVENT)
+            return mapOf(
+                "didNotificationLaunchApp" to true,
+                "notificationResponse" to event,
+            )
+        }
+
         fun consumeLaunchDetails(context: Context): Map<String, Any?>? {
             val raw = prefs(context).getString(KEY_LAUNCH_DETAILS, null) ?: return null
             prefs(context).edit().remove(KEY_LAUNCH_DETAILS).apply()
@@ -1764,7 +1791,8 @@ class FlutterLocalNotificationPluginsPlugin :
             "configureAndroidWorkManager" -> configureAndroidWorkManager(call, result)
             "getNotificationAppLaunchDetails" ->
                 result.success(
-                    consumeLaunchDetails(applicationContext)
+                    resolveLaunchDetailsFromIntent(activity?.intent)
+                        ?: consumeLaunchDetails(applicationContext)
                         ?: mapOf("didNotificationLaunchApp" to false),
                 )
             "initNotification" -> initNotification(call, result)
@@ -2458,6 +2486,10 @@ class FlutterLocalNotificationPluginsPlugin :
         if (intent?.getBooleanExtra(EXTRA_CLICK_EVENT, false) != true) {
             return false
         }
+        if (isLaunchedFromHistory(intent)) {
+            intent.removeExtra(EXTRA_CLICK_EVENT)
+            return false
+        }
         cancelClickedNotification(applicationContext, intent)
         val event = extractClickEvent(intent)
         if (fromLaunch) {
@@ -2480,6 +2512,7 @@ class FlutterLocalNotificationPluginsPlugin :
         if (taskId.isNullOrBlank()) {
             return false
         }
+        clearLaunchDetails(applicationContext)
         if (fromLaunch || activityBinding == null) {
             ProcessingOverlayService.cacheLaunchTaskId(applicationContext, taskId)
         } else {

@@ -164,6 +164,7 @@ class TimerOverlayService : Service() {
             LayoutInflater.from(this).inflate(layoutResId, null, false).apply {
                 isClickable = true
                 setOnClickListener {
+                    FlutterLocalNotificationPluginsPlugin.clearLaunchDetails(applicationContext)
                     TimerOverlayHelper.cacheAndDispatchClickEvent(
                         context = applicationContext,
                         layoutName = layoutName,

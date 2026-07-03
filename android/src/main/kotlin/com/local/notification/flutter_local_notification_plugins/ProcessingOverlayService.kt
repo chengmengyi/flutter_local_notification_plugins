@@ -488,6 +488,7 @@ class ProcessingOverlayService : Service() {
             Log.d(TAG, "handleOverlayClick ignored, app already foreground")
             return
         }
+        FlutterLocalNotificationPluginsPlugin.clearLaunchDetails(applicationContext)
         FlutterLocalNotificationPluginsPlugin.bringHostAppToForegroundOrStart(applicationContext)
     }
 
