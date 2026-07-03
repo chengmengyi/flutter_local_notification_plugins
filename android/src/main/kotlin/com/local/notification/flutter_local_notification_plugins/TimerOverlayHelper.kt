@@ -23,6 +23,8 @@ object TimerOverlayHelper {
     private const val KEY_TIMER_OVERLAY_INTERVAL_FROM_UPDATE = "timer_overlay_interval_from_update"
     private const val KEY_TIMER_OVERLAY_LAST_PDF_TITLE = "timer_overlay_last_pdf_title"
     private const val KEY_TIMER_OVERLAY_LAST_PDF_PAGE = "timer_overlay_last_pdf_page"
+    private const val KEY_TIMER_OVERLAY_CONTINUE_READING_STR =
+        "timer_overlay_continue_reading_str"
     private const val KEY_TIMER_OVERLAY_LAST_PDF_SUBTITLE_TEMPLATE =
         "timer_overlay_last_pdf_subtitle_template"
     private const val KEY_TIMER_OVERLAY_LAST_PDF_BUTTON_TEXT =
@@ -48,6 +50,7 @@ object TimerOverlayHelper {
         layoutName2: String?,
         contentList2: List<Map<String, Any?>>,
         requestedIntervalMillis: Long?,
+        continueReadingStr: String?,
         lastPdfSubtitleTemplate: String?,
         lastPdfButtonText: String?,
     ) {
@@ -62,6 +65,10 @@ object TimerOverlayHelper {
             .edit()
             .putString(KEY_TIMER_OVERLAY_LAYOUT, layoutName)
             .putString(KEY_TIMER_OVERLAY_CONTENT_LIST, JSONArray(rows).toString())
+            .putString(
+                KEY_TIMER_OVERLAY_CONTINUE_READING_STR,
+                continueReadingStr?.trim().orEmpty(),
+            )
             .putString(
                 KEY_TIMER_OVERLAY_LAST_PDF_SUBTITLE_TEMPLATE,
                 lastPdfSubtitleTemplate?.trim().orEmpty(),
@@ -267,6 +274,7 @@ object TimerOverlayHelper {
             button = config.content.button,
             button2 = config.content.button2,
             useLastPdfInfo = config.useLastPdfInfo,
+            continueReadingStr = config.continueReadingStr,
         )
         Log.d(TAG, "tryShowOverlay success source=$source")
         return true
@@ -320,6 +328,7 @@ object TimerOverlayHelper {
             .remove(KEY_TIMER_OVERLAY_INTERVAL_FROM_UPDATE)
             .remove(KEY_TIMER_OVERLAY_LAST_PDF_TITLE)
             .remove(KEY_TIMER_OVERLAY_LAST_PDF_PAGE)
+            .remove(KEY_TIMER_OVERLAY_CONTINUE_READING_STR)
             .remove(KEY_TIMER_OVERLAY_LAST_PDF_SUBTITLE_TEMPLATE)
             .remove(KEY_TIMER_OVERLAY_LAST_PDF_BUTTON_TEXT)
             .remove(KEY_TIMER_OVERLAY_CLICK_EVENT)
@@ -347,6 +356,13 @@ object TimerOverlayHelper {
             ?.takeUnless { it.isBlank() }
         val rows2 = readContentRows(sharedPrefs.getString(KEY_TIMER_OVERLAY_CONTENT_LIST_2, null))
         val useSecondLayout = layoutName2 != null && rows2.isNotEmpty() && Random.nextBoolean()
+        val continueReadingStr =
+            if (useSecondLayout) {
+                null
+            } else {
+                sharedPrefs.getString(KEY_TIMER_OVERLAY_CONTINUE_READING_STR, null)
+                    ?.takeUnless { it.isBlank() }
+            }
         val raw = if (useSecondLayout) {
             rows2[Random.nextInt(rows2.size)]
         } else {
@@ -363,6 +379,7 @@ object TimerOverlayHelper {
                     button2 = parts.getOrNull(3).orEmpty(),
                 ),
             useLastPdfInfo = !useSecondLayout,
+            continueReadingStr = continueReadingStr,
         )
     }
 
@@ -533,6 +550,7 @@ object TimerOverlayHelper {
         val layoutName: String,
         val content: TimerOverlayContent,
         val useLastPdfInfo: Boolean,
+        val continueReadingStr: String?,
     )
 
     data class TimerOverlayDisplayContent(

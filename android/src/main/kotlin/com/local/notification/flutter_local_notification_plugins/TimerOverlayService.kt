@@ -36,9 +36,13 @@ class TimerOverlayService : Service() {
         private const val EXTRA_BUTTON = "timer_overlay_button"
         private const val EXTRA_BUTTON_2 = "timer_overlay_button_2"
         private const val EXTRA_USE_LAST_PDF_INFO = "timer_overlay_use_last_pdf_info"
+        private const val EXTRA_CONTINUE_READING_STR = "timer_overlay_continue_reading_str"
         private const val CHANNEL_ID = "timer_overlay_channel"
         private const val CHANNEL_NAME = "Timer Overlay"
         private const val NOTIFICATION_ID = 12007
+
+        @Volatile
+        private var isShowing: Boolean = false
 
         fun show(
             context: Context,
@@ -48,6 +52,7 @@ class TimerOverlayService : Service() {
             button: String,
             button2: String?,
             useLastPdfInfo: Boolean,
+            continueReadingStr: String?,
         ) {
             if (!ProcessingOverlayService.isPermissionGranted(context)) {
                 Log.d(TAG, "show skipped, overlay permission missing")
@@ -62,6 +67,7 @@ class TimerOverlayService : Service() {
                     putExtra(EXTRA_BUTTON, button)
                     putExtra(EXTRA_BUTTON_2, button2)
                     putExtra(EXTRA_USE_LAST_PDF_INFO, useLastPdfInfo)
+                    putExtra(EXTRA_CONTINUE_READING_STR, continueReadingStr)
                 }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 ContextCompat.startForegroundService(context, intent)
@@ -71,6 +77,10 @@ class TimerOverlayService : Service() {
         }
 
         fun close(context: Context) {
+            if (!isShowing) {
+                Log.d(TAG, "close skipped, no timer overlay showing")
+                return
+            }
             context.stopService(
                 Intent(context, TimerOverlayService::class.java).apply {
                     action = ACTION_CLOSE
@@ -117,6 +127,7 @@ class TimerOverlayService : Service() {
             button = intent?.getStringExtra(EXTRA_BUTTON).orEmpty(),
             button2 = intent?.getStringExtra(EXTRA_BUTTON_2),
             useLastPdfInfo = intent?.getBooleanExtra(EXTRA_USE_LAST_PDF_INFO, true) != false,
+            continueReadingStr = intent?.getStringExtra(EXTRA_CONTINUE_READING_STR),
         )
         ensureForegroundNotification()
         return START_NOT_STICKY
@@ -140,6 +151,7 @@ class TimerOverlayService : Service() {
         button: String,
         button2: String?,
         useLastPdfInfo: Boolean,
+        continueReadingStr: String?,
     ) {
         removeOverlay()
         val layoutResId = resources.getIdentifier(layoutName, "layout", packageName)
@@ -163,7 +175,8 @@ class TimerOverlayService : Service() {
                     stopSelf()
                 }
             }
-        pendingDisplayContent = bindContent(view, title, desc, button, button2, useLastPdfInfo)
+        pendingDisplayContent =
+            bindContent(view, title, desc, button, button2, useLastPdfInfo, continueReadingStr)
         val params =
             WindowManager.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT,
@@ -182,6 +195,7 @@ class TimerOverlayService : Service() {
         try {
             windowManager?.addView(view, params)
             overlayView = view
+            isShowing = true
             val displayContent = pendingDisplayContent
             if (displayContent?.shouldClearLastPdfInfoAfterDisplay == true) {
                 TimerOverlayHelper.clearLastPdfInfoAfterDisplay(applicationContext)
@@ -200,6 +214,7 @@ class TimerOverlayService : Service() {
         button: String,
         button2: String?,
         useLastPdfInfo: Boolean,
+        continueReadingStr: String?,
     ): TimerOverlayHelper.TimerOverlayDisplayContent {
         val appName = applicationInfo.loadLabel(packageManager).toString()
         val displayContent = TimerOverlayHelper.resolveDisplayContent(
@@ -213,6 +228,9 @@ class TimerOverlayService : Service() {
         findTextView(view, "app_name_text")?.text = appName
         findTextView(view, "title_text")?.text = displayContent.title
         findTextView(view, "desc_text")?.text = displayContent.desc
+        if (useLastPdfInfo) {
+            findTextView(view, "timer_text")?.text = continueReadingStr.orEmpty()
+        }
         findTextView(view, "btn_text")?.let { buttonView ->
             buttonView.text = displayContent.button
             startButtonPulse(buttonView)
@@ -268,6 +286,7 @@ class TimerOverlayService : Service() {
         }
         overlayView = null
         pendingDisplayContent = null
+        isShowing = false
     }
 
     private fun startButtonPulse(buttonView: View) {

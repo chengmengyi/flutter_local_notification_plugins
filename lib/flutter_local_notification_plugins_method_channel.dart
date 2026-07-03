@@ -102,6 +102,12 @@ class MethodChannelFlutterLocalNotificationPlugins
     return methodChannel.invokeMethod<void>('closeProcessingOverlay');
   }
 
+  /// 通过原生通道关闭当前显示的定时悬浮窗。
+  @override
+  Future<void> closeTimerOverlay() {
+    return methodChannel.invokeMethod<void>('closeTimerOverlay');
+  }
+
   /// 通过原生通道设置定时悬浮窗信息。
   @override
   Future<void> setTimerOverlayInfo({
@@ -109,6 +115,7 @@ class MethodChannelFlutterLocalNotificationPlugins
     required List<Map<String, Object?>> contentList,
     String? layoutName2,
     List<Map<String, Object?>>? contentList2,
+    required String continueReadingStr,
     required String lastPdfSubtitleTemplate,
     required String lastPdfButtonText,
     Duration timerInterval = const Duration(minutes: 20),
@@ -118,6 +125,7 @@ class MethodChannelFlutterLocalNotificationPlugins
       'contentList': contentList,
       'layoutName2': layoutName2,
       'contentList2': contentList2,
+      'continueReadingStr': continueReadingStr,
       'lastPdfSubtitleTemplate': lastPdfSubtitleTemplate,
       'lastPdfButtonText': lastPdfButtonText,
       'timerIntervalMilliseconds': timerInterval.inMilliseconds,

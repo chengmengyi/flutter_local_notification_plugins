@@ -109,12 +109,18 @@ class FlutterLocalNotificationPlugins {
         .closeProcessingOverlay();
   }
 
+  /// 关闭当前显示的定时悬浮窗；保留配置和下一次定时任务。
+  Future<void> closeTimerOverlay() {
+    return FlutterLocalNotificationPluginsPlatform.instance.closeTimerOverlay();
+  }
+
   /// 设置定时悬浮窗信息；配置后 Android 每 20 分钟在应用非前台时展示一次。
   Future<void> setTimerOverlayInfo({
     required String layoutName,
     required List<TimerOverlayContent> contentList,
     String? layoutName2,
     List<TimerOverlayContent>? contentList2,
+    required String continueReadingStr,
     required String lastPdfSubtitleTemplate,
     required String lastPdfButtonText,
     Duration timerInterval = const Duration(minutes: 20),
@@ -124,6 +130,7 @@ class FlutterLocalNotificationPlugins {
       contentList: contentList.map((value) => value.toMap()).toList(),
       layoutName2: layoutName2,
       contentList2: contentList2?.map((value) => value.toMap()).toList(),
+      continueReadingStr: continueReadingStr,
       lastPdfSubtitleTemplate: lastPdfSubtitleTemplate,
       lastPdfButtonText: lastPdfButtonText,
       timerInterval: timerInterval,

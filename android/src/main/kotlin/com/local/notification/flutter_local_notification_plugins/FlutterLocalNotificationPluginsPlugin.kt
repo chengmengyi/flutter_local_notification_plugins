@@ -1695,6 +1695,7 @@ class FlutterLocalNotificationPluginsPlugin :
                 }
                 "setTimerOverlayInfo",
                 "updateTimerOverlayInfo",
+                "closeTimerOverlay",
                 -> {
                     result.success(null)
                     return
@@ -1740,6 +1741,7 @@ class FlutterLocalNotificationPluginsPlugin :
             "showProcessingOverlay" -> showProcessingOverlay(call, result)
             "updateProcessingOverlay" -> updateProcessingOverlay(call, result)
             "closeProcessingOverlay" -> closeProcessingOverlay(result)
+            "closeTimerOverlay" -> closeTimerOverlay(result)
             "setTimerOverlayInfo" -> setTimerOverlayInfo(call, result)
             "updateTimerOverlayInfo" -> updateTimerOverlayInfo(call, result)
             "updateShowMediaTag" -> updateShowMediaTag(call, result)
@@ -1922,6 +1924,11 @@ class FlutterLocalNotificationPluginsPlugin :
         result.success(null)
     }
 
+    private fun closeTimerOverlay(result: Result) {
+        TimerOverlayService.close(applicationContext)
+        result.success(null)
+    }
+
     private fun setTimerOverlayInfo(
         call: MethodCall,
         result: Result,
@@ -1936,6 +1943,8 @@ class FlutterLocalNotificationPluginsPlugin :
         val contentList2 = call.argument<List<Map<String, Any?>>>("contentList2") ?: emptyList()
         val requestedIntervalMillis =
             call.argument<Number>("timerIntervalMilliseconds")?.toLong()
+        val continueReadingStr =
+            call.argument<String>("continueReadingStr")?.trim().orEmpty()
         val lastPdfSubtitleTemplate =
             call.argument<String>("lastPdfSubtitleTemplate")?.trim().orEmpty()
         val lastPdfButtonText =
@@ -1947,6 +1956,7 @@ class FlutterLocalNotificationPluginsPlugin :
             layoutName2 = layoutName2,
             contentList2 = contentList2,
             requestedIntervalMillis = requestedIntervalMillis,
+            continueReadingStr = continueReadingStr,
             lastPdfSubtitleTemplate = lastPdfSubtitleTemplate,
             lastPdfButtonText = lastPdfButtonText,
         )

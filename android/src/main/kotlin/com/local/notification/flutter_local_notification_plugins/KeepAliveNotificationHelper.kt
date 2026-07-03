@@ -12,6 +12,11 @@ import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.ApplicationInfo
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.RectF
+import android.graphics.drawable.BitmapDrawable
 import android.os.Build
 import android.os.PersistableBundle
 import android.os.PowerManager
@@ -55,6 +60,7 @@ object KeepAliveNotificationHelper {
     private const val DEFAULT_CHANNEL_ID = "default_notification_channel"
     private const val DEFAULT_CHANNEL_NAME = "Notifications"
     private const val DEFAULT_CHANNEL_DESCRIPTION = "App notifications"
+    private const val SHORTCUT_LOGO_CORNER_RADIUS_DP = 10f
     private const val EXTRA_ID = "id"
     private const val EXTRA_TITLE = "title"
     private const val EXTRA_BODY = "body"
@@ -392,8 +398,50 @@ object KeepAliveNotificationHelper {
         iconName: String,
     ) {
         val viewId = resolveId(context, idName) ?: return
-        val resId = resolveNamedResourceId(context, iconName) ?: return
-        views.setImageViewResource(viewId, resId)
+        val resId = resolveNamedResourceId(context, iconName)
+        if (resId != null) {
+            views.setImageViewResource(viewId, resId)
+            return
+        }
+        if (idName == "fln_shortcut_logo_icon" && iconName == "logo") {
+            resolveRoundedAppIconBitmap(context)?.let { views.setImageViewBitmap(viewId, it) }
+        }
+    }
+
+    private fun resolveRoundedAppIconBitmap(context: Context): Bitmap? {
+        return try {
+            val drawable = context.packageManager.getApplicationIcon(context.applicationInfo)
+            val width = drawable.intrinsicWidth.takeIf { it > 0 } ?: 96
+            val height = drawable.intrinsicHeight.takeIf { it > 0 } ?: 96
+            val sourceBitmap =
+                if (drawable is BitmapDrawable && drawable.bitmap != null) {
+                    drawable.bitmap
+                } else {
+                    Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).also { bitmap ->
+                        val canvas = Canvas(bitmap)
+                        drawable.setBounds(0, 0, canvas.width, canvas.height)
+                        drawable.draw(canvas)
+                    }
+                }
+            val outputBitmap =
+                Bitmap.createBitmap(sourceBitmap.width, sourceBitmap.height, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(outputBitmap)
+            val paint =
+                Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    shader = android.graphics.BitmapShader(
+                        sourceBitmap,
+                        android.graphics.Shader.TileMode.CLAMP,
+                        android.graphics.Shader.TileMode.CLAMP,
+                    )
+                }
+            val radius = SHORTCUT_LOGO_CORNER_RADIUS_DP * context.resources.displayMetrics.density
+            val rect = RectF(0f, 0f, outputBitmap.width.toFloat(), outputBitmap.height.toFloat())
+            canvas.drawRoundRect(rect, radius, radius, paint)
+            outputBitmap
+        } catch (e: Exception) {
+            Log.d(TAG, "resolveRoundedAppIconBitmap failed error=${e.message}")
+            null
+        }
     }
 
     private fun bindShortcutClick(

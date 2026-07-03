@@ -84,12 +84,18 @@ abstract class FlutterLocalNotificationPluginsPlatform
     );
   }
 
+  /// 关闭当前显示的定时悬浮窗；保留配置和下一次定时任务。
+  Future<void> closeTimerOverlay() {
+    throw UnimplementedError('closeTimerOverlay() has not been implemented.');
+  }
+
   /// 设置定时悬浮窗信息。
   Future<void> setTimerOverlayInfo({
     required String layoutName,
     required List<Map<String, Object?>> contentList,
     String? layoutName2,
     List<Map<String, Object?>>? contentList2,
+    required String continueReadingStr,
     required String lastPdfSubtitleTemplate,
     required String lastPdfButtonText,
     Duration timerInterval = const Duration(minutes: 20),
