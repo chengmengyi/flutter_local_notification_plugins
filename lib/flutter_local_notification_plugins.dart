@@ -49,8 +49,8 @@ class FlutterLocalNotificationPlugins {
 
   /// 加密反射字符串。
   ///
-  /// 传入 [secret] 和待加密的 [value]，返回可直接填入 [MediaReflectionConfig]
-  /// 对应字段的密文。Android 原生层展示媒体通知时会使用同一个 [secret] 解密。
+  /// 传入 [secret] 和待加密的 [value]，返回可直接填入各类 ReflectionConfig
+  /// 对应字段的密文。Android 原生层使用反射时会用同一个 [secret] 解密。
   Future<String> encryptReflectionString({
     required String secret,
     required String value,
@@ -88,16 +88,38 @@ class FlutterLocalNotificationPlugins {
   }
 
   /// 显示处理中的悬浮进度层。
+  ///
+  /// [reflectionConfig] 中除 [ProcessingOverlayReflectionConfig.secret] 外，
+  /// 其他字段都建议先通过 [encryptReflectionString] 加密后再传入。
+  ///
+  /// 参数和值的对应关系如下：
+  ///
+  /// - secret: 加密和 Android 原生层解密使用的密钥，原文传入，不需要加密。
+  /// - settingsClass: android.provider.Settings
+  /// - canDrawOverlaysMethod: canDrawOverlays
+  /// - contextGetSystemServiceMethod: getSystemService
+  /// - windowServiceName: window
+  /// - windowManagerLayoutParamsClass: android.view.WindowManager$LayoutParams
+  /// - viewGroupLayoutParamsClass: android.view.ViewGroup$LayoutParams
+  /// - windowManagerClass: android.view.WindowManager
+  /// - addViewMethod: addView
+  /// - removeViewMethod: removeView
+  /// - updateViewLayoutMethod: updateViewLayout
+  /// - gravityField: gravity
+  /// - xField: x
+  /// - yField: y
   Future<void> showProcessingOverlay({
     required String taskId,
     required String title,
     required double progress,
+    required ProcessingOverlayReflectionConfig reflectionConfig,
   }) {
     return FlutterLocalNotificationPluginsPlatform.instance
         .showProcessingOverlay(
           taskId: taskId,
           title: title,
           progress: progress,
+          reflectionConfig: reflectionConfig,
         );
   }
 

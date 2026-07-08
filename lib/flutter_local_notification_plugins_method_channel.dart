@@ -87,11 +87,13 @@ class MethodChannelFlutterLocalNotificationPlugins
     required String taskId,
     required String title,
     required double progress,
+    required ProcessingOverlayReflectionConfig reflectionConfig,
   }) {
     return methodChannel.invokeMethod<void>('showProcessingOverlay', {
       'taskId': taskId,
       'title': title,
       'progress': progress,
+      'reflectionConfig': reflectionConfig.toMap(),
     });
   }
 

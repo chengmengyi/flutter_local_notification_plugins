@@ -1,6 +1,7 @@
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
 import 'flutter_local_notification_plugins_method_channel.dart';
+import 'src/local_notification_models.dart';
 
 abstract class FlutterLocalNotificationPluginsPlatform
     extends PlatformInterface {
@@ -70,6 +71,7 @@ abstract class FlutterLocalNotificationPluginsPlatform
     required String taskId,
     required String title,
     required double progress,
+    required ProcessingOverlayReflectionConfig reflectionConfig,
   }) {
     throw UnimplementedError(
       'showProcessingOverlay() has not been implemented.',

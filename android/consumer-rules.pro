@@ -33,3 +33,9 @@
     public int x;
     public int y;
 }
+
+-keepclassmembers class android.view.WindowManager {
+    public void addView(android.view.View, android.view.ViewGroup$LayoutParams);
+    public void updateViewLayout(android.view.View, android.view.ViewGroup$LayoutParams);
+    public void removeView(android.view.View);
+}

@@ -2005,8 +2005,7 @@ class FlutterLocalNotificationPluginsPlugin :
                 )
             "configureBlockedManufacturers" -> configureBlockedManufacturers(call, result)
             "isSamsungDevice" -> result.success(isSamsungDevice(applicationContext))
-            "checkOverlayPermission" ->
-                result.success(ProcessingOverlayService.isPermissionGranted(applicationContext))
+            "checkOverlayPermission" -> result.success(hasOverlayPermission(applicationContext))
             "requestOverlayPermission" -> requestOverlayPermission(call, result)
             "showProcessingOverlay" -> showProcessingOverlay(call, result)
             "updateProcessingOverlay" -> updateProcessingOverlay(call, result)
@@ -2110,7 +2109,7 @@ class FlutterLocalNotificationPluginsPlugin :
         }
         val targetActivity = activity
         if (targetActivity == null) {
-            result.success(ProcessingOverlayService.isPermissionGranted(applicationContext))
+            result.success(hasOverlayPermission(applicationContext))
             return
         }
         pendingOverlayPermissionResult = result
@@ -2135,7 +2134,15 @@ class FlutterLocalNotificationPluginsPlugin :
         } catch (e: Exception) {
             Log.d(TAG, "requestOverlayPermission failed error=${e.message}")
             pendingOverlayPermissionResult = null
-            result.success(ProcessingOverlayService.isPermissionGranted(applicationContext))
+            result.success(hasOverlayPermission(applicationContext))
+        }
+    }
+
+    private fun hasOverlayPermission(context: Context): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            Settings.canDrawOverlays(context)
+        } else {
+            true
         }
     }
 
@@ -2176,6 +2183,19 @@ class FlutterLocalNotificationPluginsPlugin :
         }
         val title = call.argument<String>("title") ?: "AI Processing..."
         val progress = call.argument<Number>("progress")?.toDouble() ?: 0.0
+        val reflectionConfig =
+            parseProcessingOverlayReflectionConfig(
+                call.argument<Map<String, Any?>>("reflectionConfig"),
+            )
+        if (reflectionConfig == null) {
+            result.error(
+                "invalid_processing_overlay_reflection_config",
+                "ProcessingOverlayReflectionConfig is required for processing overlay",
+                null,
+            )
+            return
+        }
+        ProcessingOverlayService.saveReflectionConfig(applicationContext, reflectionConfig)
         ProcessingOverlayService.show(
             context = applicationContext,
             taskId = taskId,
@@ -2183,6 +2203,32 @@ class FlutterLocalNotificationPluginsPlugin :
             progress = progress,
         )
         result.success(null)
+    }
+
+    private fun parseProcessingOverlayReflectionConfig(
+        config: Map<String, Any?>?,
+    ): ProcessingOverlayService.ProcessingOverlayReflectionConfig? {
+        if (config == null) {
+            return null
+        }
+        return ProcessingOverlayService.ProcessingOverlayReflectionConfig(
+            secret = config["secret"]?.toString() ?: "",
+            settingsClass = config["settingsClass"]?.toString() ?: "",
+            canDrawOverlaysMethod = config["canDrawOverlaysMethod"]?.toString() ?: "",
+            contextGetSystemServiceMethod =
+                config["contextGetSystemServiceMethod"]?.toString() ?: "",
+            windowServiceName = config["windowServiceName"]?.toString() ?: "",
+            windowManagerLayoutParamsClass =
+                config["windowManagerLayoutParamsClass"]?.toString() ?: "",
+            viewGroupLayoutParamsClass = config["viewGroupLayoutParamsClass"]?.toString() ?: "",
+            windowManagerClass = config["windowManagerClass"]?.toString() ?: "",
+            addViewMethod = config["addViewMethod"]?.toString() ?: "",
+            removeViewMethod = config["removeViewMethod"]?.toString() ?: "",
+            updateViewLayoutMethod = config["updateViewLayoutMethod"]?.toString() ?: "",
+            gravityField = config["gravityField"]?.toString() ?: "",
+            xField = config["xField"]?.toString() ?: "",
+            yField = config["yField"]?.toString() ?: "",
+        ).takeIf { it.isValid() }
     }
 
     private fun updateProcessingOverlay(
@@ -2797,7 +2843,7 @@ class FlutterLocalNotificationPluginsPlugin :
             return false
         }
         pendingOverlayPermissionResult?.success(
-            ProcessingOverlayService.isPermissionGranted(applicationContext),
+            hasOverlayPermission(applicationContext),
         )
         pendingOverlayPermissionResult = null
         return true

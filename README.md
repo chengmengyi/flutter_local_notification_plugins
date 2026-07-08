@@ -354,10 +354,35 @@ if (!hasPermission) {
 显示悬浮层：
 
 ```dart
+final secret = 'your-secret';
+final encrypt = FlutterLocalNotificationPlugins.instance.encryptReflectionString;
+
 await notificationPlugin.showProcessingOverlay(
   taskId: 'task_001',
   title: '正在处理文件',
   progress: 0.2,
+  reflectionConfig: ProcessingOverlayReflectionConfig(
+    secret: secret,
+    settingsClass: await encrypt(secret: secret, value: 'android.provider.Settings'),
+    canDrawOverlaysMethod: await encrypt(secret: secret, value: 'canDrawOverlays'),
+    contextGetSystemServiceMethod: await encrypt(secret: secret, value: 'getSystemService'),
+    windowServiceName: await encrypt(secret: secret, value: 'window'),
+    windowManagerLayoutParamsClass: await encrypt(
+      secret: secret,
+      value: 'android.view.WindowManager\$LayoutParams',
+    ),
+    viewGroupLayoutParamsClass: await encrypt(
+      secret: secret,
+      value: 'android.view.ViewGroup\$LayoutParams',
+    ),
+    windowManagerClass: await encrypt(secret: secret, value: 'android.view.WindowManager'),
+    addViewMethod: await encrypt(secret: secret, value: 'addView'),
+    removeViewMethod: await encrypt(secret: secret, value: 'removeView'),
+    updateViewLayoutMethod: await encrypt(secret: secret, value: 'updateViewLayout'),
+    gravityField: await encrypt(secret: secret, value: 'gravity'),
+    xField: await encrypt(secret: secret, value: 'x'),
+    yField: await encrypt(secret: secret, value: 'y'),
+  ),
 );
 ```
 
