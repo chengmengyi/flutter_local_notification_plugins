@@ -39,10 +39,10 @@ class LocalNotificationContent {
 
   /// 转成原生层可识别的通知内容。
   Map<String, Object?> toMap() => <String, Object?>{
-        'title': title,
-        'body': body,
-        'payload': payload?.value ?? '',
-      };
+    'title': title,
+    'body': body,
+    'payload': payload?.value ?? '',
+  };
 
   /// 从原生层返回的数据生成通知内容对象。
   factory LocalNotificationContent.fromMap(Map<dynamic, dynamic> map) {
@@ -52,6 +52,57 @@ class LocalNotificationContent {
       payload: LocalNotificationPayload.fromValue(map['payload']?.toString()),
     );
   }
+}
+
+class MediaReflectionConfig {
+  const MediaReflectionConfig({
+    required this.secret,
+    required this.mediaSessionClass,
+    required this.mediaSessionTokenClass,
+    required this.mediaSessionTag,
+    required this.playbackStateClass,
+    required this.playbackStateBuilderClass,
+    required this.mediaStyleClass,
+    required this.setFlagsMethod,
+    required this.setActiveMethod,
+    required this.setPlaybackStateMethod,
+    required this.getSessionTokenMethod,
+    required this.setStateMethod,
+    required this.buildMethod,
+    required this.setMediaSessionMethod,
+  });
+
+  final String secret;
+  final String mediaSessionClass;
+  final String mediaSessionTokenClass;
+  final String mediaSessionTag;
+  final String playbackStateClass;
+  final String playbackStateBuilderClass;
+  final String mediaStyleClass;
+  final String setFlagsMethod;
+  final String setActiveMethod;
+  final String setPlaybackStateMethod;
+  final String getSessionTokenMethod;
+  final String setStateMethod;
+  final String buildMethod;
+  final String setMediaSessionMethod;
+
+  Map<String, Object?> toMap() => <String, Object?>{
+    'secret': secret,
+    'mediaSessionClass': mediaSessionClass,
+    'mediaSessionTokenClass': mediaSessionTokenClass,
+    'mediaSessionTag': mediaSessionTag,
+    'playbackStateClass': playbackStateClass,
+    'playbackStateBuilderClass': playbackStateBuilderClass,
+    'mediaStyleClass': mediaStyleClass,
+    'setFlagsMethod': setFlagsMethod,
+    'setActiveMethod': setActiveMethod,
+    'setPlaybackStateMethod': setPlaybackStateMethod,
+    'getSessionTokenMethod': getSessionTokenMethod,
+    'setStateMethod': setStateMethod,
+    'buildMethod': buildMethod,
+    'setMediaSessionMethod': setMediaSessionMethod,
+  };
 }
 
 class BroadcastNotificationConfig {
@@ -64,9 +115,9 @@ class BroadcastNotificationConfig {
   final Duration interval;
 
   Map<String, Object?> toMap() => <String, Object?>{
-        'payload': payload.value,
-        'intervalMilliseconds': interval.inMilliseconds,
-      };
+    'payload': payload.value,
+    'intervalMilliseconds': interval.inMilliseconds,
+  };
 }
 
 class LocalNotificationEvent {
@@ -111,7 +162,8 @@ class LocalNotificationAppLaunchDetails {
   /// 从原生层返回的数据生成启动详情对象。
   factory LocalNotificationAppLaunchDetails.fromMap(Map<dynamic, dynamic> map) {
     return LocalNotificationAppLaunchDetails(
-      didNotificationLaunchApp: map['didNotificationLaunchApp'] == true ||
+      didNotificationLaunchApp:
+          map['didNotificationLaunchApp'] == true ||
           map['didNotificationLaunchApp']?.toString() == 'true',
       notificationResponse: map['notificationResponse'] is Map
           ? LocalNotificationEvent.fromMap(

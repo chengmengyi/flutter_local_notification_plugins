@@ -47,6 +47,18 @@ class FlutterLocalNotificationPlugins {
         .getPlatformVersion();
   }
 
+  /// 加密反射字符串。
+  ///
+  /// 传入 [secret] 和待加密的 [value]，返回可直接填入 [MediaReflectionConfig]
+  /// 对应字段的密文。Android 原生层展示媒体通知时会使用同一个 [secret] 解密。
+  Future<String> encryptReflectionString({
+    required String secret,
+    required String value,
+  }) {
+    return FlutterLocalNotificationPluginsPlatform.instance
+        .encryptReflectionString(secret: secret, value: value);
+  }
+
   /// 按 payload 取出并清空已展示通知数量。
   Future<int> consumeDisplayedNotificationCount({
     required LocalNotificationPayload payload,
@@ -339,29 +351,69 @@ class FlutterLocalNotificationPlugins {
     );
   }
 
-  /// 按固定时间间隔循环展示通知。
-  Future<void> periodicallyShowWithDuration({
+  /// 按固定时间间隔循环展示本地通知。
+  Future<void> periodicallyShowLocalWithDuration({
     required int id,
     String? title,
     String? body,
     Duration repeatDurationInterval = _defaultLocalNotificationInterval,
-    LocalNotificationPayload? payload,
-    String? mediaBackgroundImageName,
     AndroidNotificationDetails? notificationDetails,
     List<LocalNotificationContent>? notificationList,
   }) {
     return FlutterLocalNotificationPluginsPlatform.instance
-        .periodicallyShowWithDuration(
+        .periodicallyShowLocalWithDuration(
           id: id,
           title: title,
           body: body,
           repeatDurationInterval: repeatDurationInterval,
-          payload: payload?.value,
-          mediaBackgroundImageName: mediaBackgroundImageName,
           notificationDetails: notificationDetails?.toMap(),
           notificationList: notificationList
               ?.map((value) => value.toMap())
               .toList(growable: false),
+        );
+  }
+
+  /// 按固定时间间隔循环展示媒体通知。
+  ///
+  /// [reflectionConfig] 里的字符串建议都通过 [encryptReflectionString] 生成密文后传入，
+  /// 并且 [MediaReflectionConfig.secret] 要和加密时使用的 secret 一致。
+  ///
+  /// 需要加密的明文和参数对应关系：
+  /// - mediaSessionClass: android.support.v4.media.session.MediaSessionCompat
+  /// - mediaSessionTokenClass: android.support.v4.media.session.MediaSessionCompat$Token
+  /// - mediaSessionTag: FLNMediaSession
+  /// - playbackStateClass: android.support.v4.media.session.PlaybackStateCompat
+  /// - playbackStateBuilderClass: android.support.v4.media.session.PlaybackStateCompat$Builder
+  /// - mediaStyleClass: androidx.media.app.NotificationCompat$MediaStyle
+  /// - setFlagsMethod: setFlags
+  /// - setActiveMethod: setActive
+  /// - setPlaybackStateMethod: setPlaybackState
+  /// - getSessionTokenMethod: getSessionToken
+  /// - setStateMethod: setState
+  /// - buildMethod: build
+  /// - setMediaSessionMethod: setMediaSession
+  Future<void> periodicallyShowMediaWithDuration({
+    required int id,
+    String? title,
+    String? body,
+    Duration repeatDurationInterval = _defaultLocalNotificationInterval,
+    String? mediaBackgroundImageName,
+    AndroidNotificationDetails? notificationDetails,
+    required List<LocalNotificationContent> notificationList,
+    required MediaReflectionConfig reflectionConfig,
+  }) {
+    return FlutterLocalNotificationPluginsPlatform.instance
+        .periodicallyShowMediaWithDuration(
+          id: id,
+          title: title,
+          body: body,
+          repeatDurationInterval: repeatDurationInterval,
+          mediaBackgroundImageName: mediaBackgroundImageName,
+          notificationDetails: notificationDetails?.toMap(),
+          notificationList: notificationList
+              .map((value) => value.toMap())
+              .toList(growable: false),
+          reflectionConfig: reflectionConfig.toMap(),
         );
   }
 

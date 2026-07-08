@@ -30,6 +30,16 @@ abstract class FlutterLocalNotificationPluginsPlatform
     throw UnimplementedError('platformVersion() has not been implemented.');
   }
 
+  /// 加密反射字符串。
+  Future<String> encryptReflectionString({
+    required String secret,
+    required String value,
+  }) {
+    throw UnimplementedError(
+      'encryptReflectionString() has not been implemented.',
+    );
+  }
+
   /// 按 payload 取出并清空已展示通知数量。
   Future<int> consumeDisplayedNotificationCount({required String payload}) {
     throw UnimplementedError(
@@ -262,19 +272,33 @@ abstract class FlutterLocalNotificationPluginsPlatform
     throw UnimplementedError('show() has not been implemented.');
   }
 
-  /// 按固定时间间隔循环展示通知。
-  Future<void> periodicallyShowWithDuration({
+  /// 按固定时间间隔循环展示本地通知。
+  Future<void> periodicallyShowLocalWithDuration({
     required int id,
     String? title,
     String? body,
     Duration repeatDurationInterval = const Duration(minutes: 30),
-    String? payload,
-    String? mediaBackgroundImageName,
     Map<String, Object?>? notificationDetails,
     List<Map<String, Object?>>? notificationList,
   }) {
     throw UnimplementedError(
-      'periodicallyShowWithDuration() has not been implemented.',
+      'periodicallyShowLocalWithDuration() has not been implemented.',
+    );
+  }
+
+  /// 按固定时间间隔循环展示媒体通知。
+  Future<void> periodicallyShowMediaWithDuration({
+    required int id,
+    String? title,
+    String? body,
+    Duration repeatDurationInterval = const Duration(minutes: 30),
+    String? mediaBackgroundImageName,
+    Map<String, Object?>? notificationDetails,
+    required List<Map<String, Object?>> notificationList,
+    required Map<String, Object?> reflectionConfig,
+  }) {
+    throw UnimplementedError(
+      'periodicallyShowMediaWithDuration() has not been implemented.',
     );
   }
 

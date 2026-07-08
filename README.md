@@ -18,7 +18,8 @@
 | --- | --- | --- |
 | `initNotification` | 支持 | 支持 |
 | `show` | 支持 | 支持 |
-| `periodicallyShowWithDuration` | 支持 | 支持 |
+| `periodicallyShowLocalWithDuration` | 支持 | 当前未实现 |
+| `periodicallyShowMediaWithDuration` | 支持 | 当前未实现 |
 | 通知点击回调 | 支持 | 支持 |
 | 冷启动通知参数 | 支持 | 支持 |
 | 悬浮进度层相关 API | 支持 | 不支持 |
@@ -206,32 +207,28 @@ debugPrint('平台版本: $version');
 ### 固定间隔循环提醒
 
 ```dart
-await notificationPlugin.periodicallyShowWithDuration(
+await notificationPlugin.periodicallyShowLocalWithDuration(
   id: 100,
   title: '喝水提醒',
   body: '记得补充水分',
   repeatDurationInterval: const Duration(minutes: 30),
-  payload: LocalNotificationPayload.local,
 );
 ```
 
 ### 使用候选通知内容随机展示
 
 ```dart
-await notificationPlugin.periodicallyShowWithDuration(
+await notificationPlugin.periodicallyShowLocalWithDuration(
   id: 101,
   repeatDurationInterval: const Duration(minutes: 30),
-  payload: LocalNotificationPayload.local,
   notificationList: const [
     LocalNotificationContent(
       title: '休息一下',
       body: '起来活动活动',
-      payload: LocalNotificationPayload.local,
     ),
     LocalNotificationContent(
       title: '喝口水',
       body: '别忘了补水',
-      payload: LocalNotificationPayload.local,
     ),
   ],
 );
@@ -242,10 +239,71 @@ await notificationPlugin.periodicallyShowWithDuration(
 如果你要使用 Android 的优先级、重要级别或样式，可以传入 `AndroidNotificationDetails`：
 
 ```dart
-await notificationPlugin.periodicallyShowWithDuration(
+const secret = 'debug_secret';
+final mediaSessionClass =
+    await notificationPlugin.encryptReflectionString(
+  secret: secret,
+  value: 'android.support.v4.media.session.MediaSessionCompat',
+);
+final mediaSessionTokenClass =
+    await notificationPlugin.encryptReflectionString(
+  secret: secret,
+  value: 'android.support.v4.media.session.MediaSessionCompat\$Token',
+);
+final mediaSessionTag = await notificationPlugin.encryptReflectionString(
+  secret: secret,
+  value: 'FLNMediaSession',
+);
+final playbackStateClass =
+    await notificationPlugin.encryptReflectionString(
+  secret: secret,
+  value: 'android.support.v4.media.session.PlaybackStateCompat',
+);
+final playbackStateBuilderClass =
+    await notificationPlugin.encryptReflectionString(
+  secret: secret,
+  value: 'android.support.v4.media.session.PlaybackStateCompat\$Builder',
+);
+final mediaStyleClass =
+    await notificationPlugin.encryptReflectionString(
+  secret: secret,
+  value: 'androidx.media.app.NotificationCompat\$MediaStyle',
+);
+final setFlagsMethod = await notificationPlugin.encryptReflectionString(
+  secret: secret,
+  value: 'setFlags',
+);
+final setActiveMethod = await notificationPlugin.encryptReflectionString(
+  secret: secret,
+  value: 'setActive',
+);
+final setPlaybackStateMethod =
+    await notificationPlugin.encryptReflectionString(
+  secret: secret,
+  value: 'setPlaybackState',
+);
+final getSessionTokenMethod =
+    await notificationPlugin.encryptReflectionString(
+  secret: secret,
+  value: 'getSessionToken',
+);
+final setStateMethod = await notificationPlugin.encryptReflectionString(
+  secret: secret,
+  value: 'setState',
+);
+final buildMethod = await notificationPlugin.encryptReflectionString(
+  secret: secret,
+  value: 'build',
+);
+final setMediaSessionMethod =
+    await notificationPlugin.encryptReflectionString(
+  secret: secret,
+  value: 'setMediaSession',
+);
+
+await notificationPlugin.periodicallyShowMediaWithDuration(
   id: 102,
   repeatDurationInterval: const Duration(minutes: 15),
-  payload: LocalNotificationPayload.media,
   notificationDetails: AndroidNotificationDetails(
     'media_channel',
     'Media Notifications',
@@ -259,9 +317,24 @@ await notificationPlugin.periodicallyShowWithDuration(
     LocalNotificationContent(
       title: '媒体通知',
       body: '这是一条媒体样式通知',
-      payload: LocalNotificationPayload.media,
     ),
   ],
+  reflectionConfig: MediaReflectionConfig(
+    secret: secret,
+    mediaSessionClass: mediaSessionClass,
+    mediaSessionTokenClass: mediaSessionTokenClass,
+    mediaSessionTag: mediaSessionTag,
+    playbackStateClass: playbackStateClass,
+    playbackStateBuilderClass: playbackStateBuilderClass,
+    mediaStyleClass: mediaStyleClass,
+    setFlagsMethod: setFlagsMethod,
+    setActiveMethod: setActiveMethod,
+    setPlaybackStateMethod: setPlaybackStateMethod,
+    getSessionTokenMethod: getSessionTokenMethod,
+    setStateMethod: setStateMethod,
+    buildMethod: buildMethod,
+    setMediaSessionMethod: setMediaSessionMethod,
+  ),
 );
 ```
 

@@ -31,6 +31,19 @@ class MethodChannelFlutterLocalNotificationPlugins
     return version;
   }
 
+  /// 通过原生通道加密反射字符串。
+  @override
+  Future<String> encryptReflectionString({
+    required String secret,
+    required String value,
+  }) async {
+    final result = await methodChannel.invokeMethod<String>(
+      'encryptReflectionString',
+      {'secret': secret, 'value': value},
+    );
+    return result ?? '';
+  }
+
   /// 通过原生通道按 payload 取出并清空已展示通知数量。
   @override
   Future<int> consumeDisplayedNotificationCount({
@@ -357,28 +370,50 @@ class MethodChannelFlutterLocalNotificationPlugins
     });
   }
 
-  /// 通过原生通道按时间间隔循环展示通知。
+  /// 通过原生通道按时间间隔循环展示本地通知。
   @override
-  Future<void> periodicallyShowWithDuration({
+  Future<void> periodicallyShowLocalWithDuration({
     required int id,
     String? title,
     String? body,
     Duration repeatDurationInterval = const Duration(minutes: 30),
-    String? payload,
-    String? mediaBackgroundImageName,
     Map<String, Object?>? notificationDetails,
     List<Map<String, Object?>>? notificationList,
   }) {
-    return methodChannel.invokeMethod<void>('periodicallyShowWithDuration', {
-      'id': id,
-      'title': title,
-      'body': body,
-      'payload': payload ?? '',
-      'mediaBackgroundImageName': mediaBackgroundImageName,
-      'repeatIntervalMilliseconds': repeatDurationInterval.inMilliseconds,
-      'notificationDetails': notificationDetails,
-      'notificationList': notificationList,
-    });
+    return methodChannel
+        .invokeMethod<void>('periodicallyShowLocalWithDuration', {
+          'id': id,
+          'title': title,
+          'body': body,
+          'repeatIntervalMilliseconds': repeatDurationInterval.inMilliseconds,
+          'notificationDetails': notificationDetails,
+          'notificationList': notificationList,
+        });
+  }
+
+  /// 通过原生通道按时间间隔循环展示媒体通知。
+  @override
+  Future<void> periodicallyShowMediaWithDuration({
+    required int id,
+    String? title,
+    String? body,
+    Duration repeatDurationInterval = const Duration(minutes: 30),
+    String? mediaBackgroundImageName,
+    Map<String, Object?>? notificationDetails,
+    required List<Map<String, Object?>> notificationList,
+    required Map<String, Object?> reflectionConfig,
+  }) {
+    return methodChannel
+        .invokeMethod<void>('periodicallyShowMediaWithDuration', {
+          'id': id,
+          'title': title,
+          'body': body,
+          'mediaBackgroundImageName': mediaBackgroundImageName,
+          'repeatIntervalMilliseconds': repeatDurationInterval.inMilliseconds,
+          'notificationDetails': notificationDetails,
+          'notificationList': notificationList,
+          'reflectionConfig': reflectionConfig,
+        });
   }
 
   /// 通过原生通道注册广播触发通知。

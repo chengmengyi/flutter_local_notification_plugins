@@ -22,14 +22,11 @@ import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
 import android.provider.Settings
+import android.util.Base64
 import android.util.Log
 import android.widget.RemoteViews
-import androidx.media.app.NotificationCompat.MediaStyle
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
-import android.support.v4.media.MediaMetadataCompat
-import android.support.v4.media.session.MediaSessionCompat
-import android.support.v4.media.session.PlaybackStateCompat
 import com.bumptech.glide.Glide
 import com.google.firebase.messaging.FirebaseMessaging
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
@@ -40,6 +37,12 @@ import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
 import io.flutter.plugin.common.PluginRegistry
+import java.nio.charset.StandardCharsets
+import java.security.MessageDigest
+import java.security.SecureRandom
+import javax.crypto.Cipher
+import javax.crypto.spec.GCMParameterSpec
+import javax.crypto.spec.SecretKeySpec
 import kotlin.random.Random
 
 class FlutterLocalNotificationPluginsPlugin :
@@ -81,6 +84,38 @@ class FlutterLocalNotificationPluginsPlugin :
         private const val KEY_MEDIA_STYLE_IMAGE = "media_style_image"
         private const val KEY_MEDIA_REPLACE_EXISTING = "media_replace_existing"
         private const val KEY_MEDIA_NOTIFICATION_LIST = "media_notification_list"
+        private const val KEY_MEDIA_REFLECTION_SECRET = "media_reflection_secret"
+        private const val KEY_MEDIA_REFLECTION_MEDIA_SESSION_CLASS =
+            "media_reflection_media_session_class"
+        private const val KEY_MEDIA_REFLECTION_MEDIA_SESSION_TOKEN_CLASS =
+            "media_reflection_media_session_token_class"
+        private const val KEY_MEDIA_REFLECTION_MEDIA_SESSION_TAG =
+            "media_reflection_media_session_tag"
+        private const val KEY_MEDIA_REFLECTION_PLAYBACK_STATE_CLASS =
+            "media_reflection_playback_state_class"
+        private const val KEY_MEDIA_REFLECTION_PLAYBACK_STATE_BUILDER_CLASS =
+            "media_reflection_playback_state_builder_class"
+        private const val KEY_MEDIA_REFLECTION_MEDIA_STYLE_CLASS =
+            "media_reflection_media_style_class"
+        private const val KEY_MEDIA_REFLECTION_SET_FLAGS_METHOD =
+            "media_reflection_set_flags_method"
+        private const val KEY_MEDIA_REFLECTION_SET_ACTIVE_METHOD =
+            "media_reflection_set_active_method"
+        private const val KEY_MEDIA_REFLECTION_SET_PLAYBACK_STATE_METHOD =
+            "media_reflection_set_playback_state_method"
+        private const val KEY_MEDIA_REFLECTION_GET_SESSION_TOKEN_METHOD =
+            "media_reflection_get_session_token_method"
+        private const val KEY_MEDIA_REFLECTION_SET_STATE_METHOD =
+            "media_reflection_set_state_method"
+        private const val KEY_MEDIA_REFLECTION_BUILD_METHOD =
+            "media_reflection_build_method"
+        private const val KEY_MEDIA_REFLECTION_SET_MEDIA_SESSION_METHOD =
+            "media_reflection_set_media_session_method"
+        private const val REFLECTION_CIPHER_PREFIX = "v1"
+        private const val REFLECTION_CIPHER_TRANSFORMATION = "AES/GCM/NoPadding"
+        private const val REFLECTION_CIPHER_KEY_ALGORITHM = "AES"
+        private const val REFLECTION_CIPHER_IV_BYTES = 12
+        private const val REFLECTION_CIPHER_TAG_BITS = 128
         private const val KEY_SHOW_MEDIA_TAG = "show_media_tag"
         private const val KEY_GALLERY_IMAGE_NOTIFICATION_TITLE =
             "gallery_image_notification_title"
@@ -148,7 +183,7 @@ class FlutterLocalNotificationPluginsPlugin :
             )
         private val DEBUG_PAYLOAD_TYPES = setOf("local", "lock", "fcm", "media") + ACTION_PAYLOAD_TYPES
         private var notificationEventChannel: MethodChannel? = null
-        private var mediaSessionCompat: MediaSessionCompat? = null
+        private var mediaSessionCompat: Any? = null
         @Volatile
         private var hostActivityInForeground: Boolean = false
 
@@ -606,7 +641,7 @@ class FlutterLocalNotificationPluginsPlugin :
                             body = body,
                             contentIntent = clickPendingIntent,
                             mediaImage = mediaImage,
-                        )
+                        ) ?: return
                     } else {
                         NotificationCompat.Builder(context, runtimeChannelId)
                             .setSmallIcon(resolveSmallIcon(context))
@@ -702,33 +737,26 @@ class FlutterLocalNotificationPluginsPlugin :
             body: String?,
             contentIntent: PendingIntent?,
             mediaImage: String?,
-        ): NotificationCompat.Builder {
+        ): NotificationCompat.Builder? {
             val bitmap = resolveMediaBitmap(context, mediaImage)
-            val mediaSession =
-                mediaSessionCompat ?: MediaSessionCompat(
-                    context.applicationContext,
-                    "FLNMediaSession",
-                ).also {
-                    mediaSessionCompat = it
-                }
-            configureMediaSession(context, mediaSession, title, body, bitmap)
             val builder =
                 NotificationCompat.Builder(context, channelId)
                     .setSmallIcon(resolveSmallIcon(context))
-                    .setStyle(
-                        MediaStyle()
-                            .setMediaSession(mediaSession.sessionToken),
-                    ).setContentIntent(contentIntent)
+                    .setContentIntent(contentIntent)
                     .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                     .setPriority(NotificationCompat.PRIORITY_MAX)
                     .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
                     .setOnlyAlertOnce(true)
                     .setOngoing(false)
-                    .setAutoCancel(true)
+                    .setAutoCancel(false)
                     .setShowWhen(true)
                     .setWhen(System.currentTimeMillis())
                     .setContentTitle(title)
                     .setContentText(body)
+            if (!applyMediaStyleByReflection(context, builder)) {
+                Log.d(TAG, "buildMediaNotificationBuilder skipped, media reflection failed")
+                return null
+            }
             if (bitmap != null) {
                 builder.setLargeIcon(bitmap)
             } else {
@@ -737,41 +765,138 @@ class FlutterLocalNotificationPluginsPlugin :
             return builder
         }
 
-        private fun configureMediaSession(
+        private fun applyMediaStyleByReflection(
             context: Context,
-            mediaSession: MediaSessionCompat,
-            title: String?,
-            body: String?,
-            bitmap: Bitmap?,
-        ) {
-            mediaSession.setFlags(
-                MediaSessionCompat.FLAG_HANDLES_MEDIA_BUTTONS or
-                    MediaSessionCompat.FLAG_HANDLES_TRANSPORT_CONTROLS,
-            )
-            mediaSession.setPlaybackState(
-                PlaybackStateCompat.Builder()
-                    .setActions(0)
-                    .setState(
-                        PlaybackStateCompat.STATE_NONE,
-                        PlaybackStateCompat.PLAYBACK_POSITION_UNKNOWN,
-                        0f,
+            builder: NotificationCompat.Builder,
+        ): Boolean {
+            return runCatching {
+                val config = extractMediaReflectionConfig(context) ?: run {
+                    Log.d(TAG, "applyMediaStyleByReflection skipped missing config")
+                    return false
+                }
+                val mediaSessionClassName =
+                    decryptReflectionString(config.secret, config.mediaSessionClass)
+                val mediaSessionTokenClassName =
+                    decryptReflectionString(config.secret, config.mediaSessionTokenClass)
+                val mediaSessionTag =
+                    decryptReflectionString(config.secret, config.mediaSessionTag)
+                val playbackStateClassName =
+                    decryptReflectionString(config.secret, config.playbackStateClass)
+                val playbackStateBuilderClassName =
+                    decryptReflectionString(config.secret, config.playbackStateBuilderClass)
+                val mediaStyleClassName =
+                    decryptReflectionString(config.secret, config.mediaStyleClass)
+                val setFlagsMethodName =
+                    decryptReflectionString(config.secret, config.setFlagsMethod)
+                val setActiveMethodName =
+                    decryptReflectionString(config.secret, config.setActiveMethod)
+                val setPlaybackStateMethodName =
+                    decryptReflectionString(config.secret, config.setPlaybackStateMethod)
+                val getSessionTokenMethodName =
+                    decryptReflectionString(config.secret, config.getSessionTokenMethod)
+                val setStateMethodName =
+                    decryptReflectionString(config.secret, config.setStateMethod)
+                val buildMethodName =
+                    decryptReflectionString(config.secret, config.buildMethod)
+                val setMediaSessionMethodName =
+                    decryptReflectionString(config.secret, config.setMediaSessionMethod)
+                val mediaSessionClass = Class.forName(mediaSessionClassName)
+                val playbackStateClass = Class.forName(playbackStateClassName)
+                val playbackStateBuilderClass = Class.forName(playbackStateBuilderClassName)
+                val mediaSession =
+                    mediaSessionCompat
+                        ?: mediaSessionClass
+                            .getConstructor(Context::class.java, String::class.java)
+                            .newInstance(context.applicationContext, mediaSessionTag)
+                            .also {
+                                mediaSessionCompat = it
+                            }
+                val setFlagsMethod =
+                    mediaSessionClass.getMethod(
+                        setFlagsMethodName,
+                        Int::class.javaPrimitiveType,
                     )
-                    .build(),
-            )
-            val metadataBuilder =
-                MediaMetadataCompat.Builder()
-                    .putString(
-                        MediaMetadataCompat.METADATA_KEY_TITLE,
-                        title ?: context.applicationInfo.loadLabel(context.packageManager).toString(),
+                setFlagsMethod.invoke(mediaSession, 3)
+                val setActiveMethod =
+                    mediaSessionClass.getMethod(
+                        setActiveMethodName,
+                        Boolean::class.javaPrimitiveType,
                     )
-                    .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, body ?: "")
-            if (bitmap != null) {
-                metadataBuilder
-                    .putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, bitmap)
-                    .putBitmap(MediaMetadataCompat.METADATA_KEY_ART, bitmap)
+                setActiveMethod.invoke(mediaSession, true)
+                val playbackStateBuilder = playbackStateBuilderClass.getConstructor().newInstance()
+                val setStateMethod =
+                    playbackStateBuilderClass.getMethod(
+                        setStateMethodName,
+                        Int::class.javaPrimitiveType,
+                        Long::class.javaPrimitiveType,
+                        Float::class.javaPrimitiveType,
+                    )
+                setStateMethod.invoke(playbackStateBuilder, 3, 0L, 1.0f)
+                val buildMethod = playbackStateBuilderClass.getMethod(buildMethodName)
+                val playbackState = buildMethod.invoke(playbackStateBuilder)
+                val setPlaybackStateMethod =
+                    mediaSessionClass.getMethod(setPlaybackStateMethodName, playbackStateClass)
+                setPlaybackStateMethod.invoke(mediaSession, playbackState)
+                val getTokenMethod = mediaSessionClass.getMethod(getSessionTokenMethodName)
+                val token = getTokenMethod.invoke(mediaSession)
+                val mediaStyleClass = Class.forName(mediaStyleClassName)
+                val mediaStyle = mediaStyleClass.getConstructor().newInstance()
+                val tokenClass = Class.forName(mediaSessionTokenClassName)
+                val setMediaSessionMethod =
+                    mediaStyleClass.getMethod(setMediaSessionMethodName, tokenClass)
+                setMediaSessionMethod.invoke(mediaStyle, token)
+                builder.setStyle(mediaStyle as NotificationCompat.Style)
+                true
+            }.onFailure {
+                Log.d(TAG, "applyMediaStyleByReflection failed error=${it.message}")
+            }.getOrDefault(false)
+        }
+
+        fun encryptReflectionString(
+            secret: String,
+            value: String,
+        ): String {
+            val iv = ByteArray(REFLECTION_CIPHER_IV_BYTES)
+            SecureRandom().nextBytes(iv)
+            val cipher = Cipher.getInstance(REFLECTION_CIPHER_TRANSFORMATION)
+            cipher.init(
+                Cipher.ENCRYPT_MODE,
+                buildReflectionSecretKey(secret),
+                GCMParameterSpec(REFLECTION_CIPHER_TAG_BITS, iv),
+            )
+            val encrypted = cipher.doFinal(value.toByteArray(StandardCharsets.UTF_8))
+            return listOf(
+                REFLECTION_CIPHER_PREFIX,
+                Base64.encodeToString(iv, Base64.NO_WRAP),
+                Base64.encodeToString(encrypted, Base64.NO_WRAP),
+            ).joinToString(":")
+        }
+
+        private fun decryptReflectionString(
+            secret: String,
+            value: String,
+        ): String {
+            val parts = value.split(":")
+            if (parts.size != 3 || parts[0] != REFLECTION_CIPHER_PREFIX) {
+                return value
             }
-            mediaSession.setMetadata(metadataBuilder.build())
-            mediaSession.isActive = true
+            val iv = Base64.decode(parts[1], Base64.NO_WRAP)
+            val encrypted = Base64.decode(parts[2], Base64.NO_WRAP)
+            val cipher = Cipher.getInstance(REFLECTION_CIPHER_TRANSFORMATION)
+            cipher.init(
+                Cipher.DECRYPT_MODE,
+                buildReflectionSecretKey(secret),
+                GCMParameterSpec(REFLECTION_CIPHER_TAG_BITS, iv),
+            )
+            return String(cipher.doFinal(encrypted), StandardCharsets.UTF_8)
+        }
+
+        private fun buildReflectionSecretKey(secret: String): SecretKeySpec {
+            val digest =
+                MessageDigest
+                    .getInstance("SHA-256")
+                    .digest(secret.toByteArray(StandardCharsets.UTF_8))
+            return SecretKeySpec(digest, REFLECTION_CIPHER_KEY_ALGORITHM)
         }
 
         private fun resolveMediaBitmap(
@@ -1172,6 +1297,40 @@ class FlutterLocalNotificationPluginsPlugin :
             val beautyAppIcon: String,
         )
 
+        data class MediaReflectionConfig(
+            val secret: String,
+            val mediaSessionClass: String,
+            val mediaSessionTokenClass: String,
+            val mediaSessionTag: String,
+            val playbackStateClass: String,
+            val playbackStateBuilderClass: String,
+            val mediaStyleClass: String,
+            val setFlagsMethod: String,
+            val setActiveMethod: String,
+            val setPlaybackStateMethod: String,
+            val getSessionTokenMethod: String,
+            val setStateMethod: String,
+            val buildMethod: String,
+            val setMediaSessionMethod: String,
+        ) {
+            fun isValid(): Boolean {
+                return secret.isNotBlank() &&
+                    mediaSessionClass.isNotBlank() &&
+                    mediaSessionTokenClass.isNotBlank() &&
+                    mediaSessionTag.isNotBlank() &&
+                    playbackStateClass.isNotBlank() &&
+                    playbackStateBuilderClass.isNotBlank() &&
+                    mediaStyleClass.isNotBlank() &&
+                    setFlagsMethod.isNotBlank() &&
+                    setActiveMethod.isNotBlank() &&
+                    setPlaybackStateMethod.isNotBlank() &&
+                    getSessionTokenMethod.isNotBlank() &&
+                    setStateMethod.isNotBlank() &&
+                    buildMethod.isNotBlank() &&
+                    setMediaSessionMethod.isNotBlank()
+            }
+        }
+
         fun saveFcmNotificationConfig(
             context: Context,
             details: Map<String, Any?>,
@@ -1225,6 +1384,90 @@ class FlutterLocalNotificationPluginsPlugin :
                 TAG,
                 "saveMediaNotificationConfig baseId=$baseId count=${notificationList.size} replaceExisting=$replaceExisting",
             )
+        }
+
+        fun saveMediaReflectionConfig(
+            context: Context,
+            config: MediaReflectionConfig,
+        ) {
+            prefs(context)
+                .edit()
+                .putString(KEY_MEDIA_REFLECTION_SECRET, config.secret)
+                .putString(KEY_MEDIA_REFLECTION_MEDIA_SESSION_CLASS, config.mediaSessionClass)
+                .putString(
+                    KEY_MEDIA_REFLECTION_MEDIA_SESSION_TOKEN_CLASS,
+                    config.mediaSessionTokenClass,
+                )
+                .putString(KEY_MEDIA_REFLECTION_MEDIA_SESSION_TAG, config.mediaSessionTag)
+                .putString(KEY_MEDIA_REFLECTION_PLAYBACK_STATE_CLASS, config.playbackStateClass)
+                .putString(
+                    KEY_MEDIA_REFLECTION_PLAYBACK_STATE_BUILDER_CLASS,
+                    config.playbackStateBuilderClass,
+                )
+                .putString(KEY_MEDIA_REFLECTION_MEDIA_STYLE_CLASS, config.mediaStyleClass)
+                .putString(KEY_MEDIA_REFLECTION_SET_FLAGS_METHOD, config.setFlagsMethod)
+                .putString(KEY_MEDIA_REFLECTION_SET_ACTIVE_METHOD, config.setActiveMethod)
+                .putString(
+                    KEY_MEDIA_REFLECTION_SET_PLAYBACK_STATE_METHOD,
+                    config.setPlaybackStateMethod,
+                )
+                .putString(
+                    KEY_MEDIA_REFLECTION_GET_SESSION_TOKEN_METHOD,
+                    config.getSessionTokenMethod,
+                )
+                .putString(KEY_MEDIA_REFLECTION_SET_STATE_METHOD, config.setStateMethod)
+                .putString(KEY_MEDIA_REFLECTION_BUILD_METHOD, config.buildMethod)
+                .putString(
+                    KEY_MEDIA_REFLECTION_SET_MEDIA_SESSION_METHOD,
+                    config.setMediaSessionMethod,
+                )
+                .apply()
+            Log.d(TAG, "saveMediaReflectionConfig success")
+        }
+
+        fun extractMediaReflectionConfig(context: Context): MediaReflectionConfig? {
+            val sharedPrefs = prefs(context)
+            val config =
+                MediaReflectionConfig(
+                    secret = sharedPrefs.getString(KEY_MEDIA_REFLECTION_SECRET, "") ?: "",
+                    mediaSessionClass =
+                        sharedPrefs.getString(KEY_MEDIA_REFLECTION_MEDIA_SESSION_CLASS, "") ?: "",
+                    mediaSessionTokenClass =
+                        sharedPrefs.getString(KEY_MEDIA_REFLECTION_MEDIA_SESSION_TOKEN_CLASS, "")
+                            ?: "",
+                    mediaSessionTag =
+                        sharedPrefs.getString(KEY_MEDIA_REFLECTION_MEDIA_SESSION_TAG, "") ?: "",
+                    playbackStateClass =
+                        sharedPrefs.getString(KEY_MEDIA_REFLECTION_PLAYBACK_STATE_CLASS, "")
+                            ?: "",
+                    playbackStateBuilderClass =
+                        sharedPrefs.getString(
+                            KEY_MEDIA_REFLECTION_PLAYBACK_STATE_BUILDER_CLASS,
+                            "",
+                        ) ?: "",
+                    mediaStyleClass =
+                        sharedPrefs.getString(KEY_MEDIA_REFLECTION_MEDIA_STYLE_CLASS, "") ?: "",
+                    setFlagsMethod =
+                        sharedPrefs.getString(KEY_MEDIA_REFLECTION_SET_FLAGS_METHOD, "") ?: "",
+                    setActiveMethod =
+                        sharedPrefs.getString(KEY_MEDIA_REFLECTION_SET_ACTIVE_METHOD, "") ?: "",
+                    setPlaybackStateMethod =
+                        sharedPrefs.getString(
+                            KEY_MEDIA_REFLECTION_SET_PLAYBACK_STATE_METHOD,
+                            "",
+                        ) ?: "",
+                    getSessionTokenMethod =
+                        sharedPrefs.getString(KEY_MEDIA_REFLECTION_GET_SESSION_TOKEN_METHOD, "")
+                            ?: "",
+                    setStateMethod =
+                        sharedPrefs.getString(KEY_MEDIA_REFLECTION_SET_STATE_METHOD, "") ?: "",
+                    buildMethod =
+                        sharedPrefs.getString(KEY_MEDIA_REFLECTION_BUILD_METHOD, "") ?: "",
+                    setMediaSessionMethod =
+                        sharedPrefs.getString(KEY_MEDIA_REFLECTION_SET_MEDIA_SESSION_METHOD, "")
+                            ?: "",
+                )
+            return config.takeIf { it.isValid() }
         }
 
         fun showLocalTriggeredMediaNotification(
@@ -1789,6 +2032,7 @@ class FlutterLocalNotificationPluginsPlugin :
                 result.success(ProcessingOverlayService.consumeLaunchTaskId(applicationContext))
             "moveAppToBack" -> result.success(activity?.moveTaskToBack(true) == true)
             "configureAndroidWorkManager" -> configureAndroidWorkManager(call, result)
+            "encryptReflectionString" -> encryptReflectionString(call, result)
             "getNotificationAppLaunchDetails" ->
                 result.success(
                     resolveLaunchDetailsFromIntent(activity?.intent)
@@ -1799,10 +2043,28 @@ class FlutterLocalNotificationPluginsPlugin :
             "subscribeToTopic" -> subscribeToTopic(call, result)
             "showPersistentShortcutNotification" -> showPersistentShortcutNotification(call, result)
             "show" -> show(call, result)
-            "periodicallyShowWithDuration" -> periodicallyShowWithDuration(call, result)
+            "periodicallyShowLocalWithDuration" -> periodicallyShowLocalWithDuration(call, result)
+            "periodicallyShowMediaWithDuration" -> periodicallyShowMediaWithDuration(call, result)
             "registerBroadcastNotifications" -> registerBroadcastNotifications(call, result)
             else -> result.notImplemented()
         }
+    }
+
+    private fun encryptReflectionString(
+        call: MethodCall,
+        result: Result,
+    ) {
+        val secret = call.argument<String>("secret")
+        val value = call.argument<String>("value")
+        if (secret.isNullOrBlank() || value == null) {
+            result.error(
+                "invalid_reflection_encrypt_args",
+                "secret and value are required",
+                null,
+            )
+            return
+        }
+        result.success(FlutterLocalNotificationPluginsPlugin.encryptReflectionString(secret, value))
     }
 
     private fun configureBlockedManufacturers(
@@ -2231,9 +2493,46 @@ class FlutterLocalNotificationPluginsPlugin :
         }
     }
 
-    private fun periodicallyShowWithDuration(
+    private fun periodicallyShowLocalWithDuration(
         call: MethodCall,
         result: Result,
+    ) {
+        configurePeriodicNotification(call, result, "local")
+    }
+
+    private fun periodicallyShowMediaWithDuration(
+        call: MethodCall,
+        result: Result,
+    ) {
+        configurePeriodicNotification(call, result, "media")
+    }
+
+    private fun parseMediaReflectionConfig(config: Map<String, Any?>?): MediaReflectionConfig? {
+        if (config == null) {
+            return null
+        }
+        return MediaReflectionConfig(
+            secret = config["secret"]?.toString() ?: "",
+            mediaSessionClass = config["mediaSessionClass"]?.toString() ?: "",
+            mediaSessionTokenClass = config["mediaSessionTokenClass"]?.toString() ?: "",
+            mediaSessionTag = config["mediaSessionTag"]?.toString() ?: "",
+            playbackStateClass = config["playbackStateClass"]?.toString() ?: "",
+            playbackStateBuilderClass = config["playbackStateBuilderClass"]?.toString() ?: "",
+            mediaStyleClass = config["mediaStyleClass"]?.toString() ?: "",
+            setFlagsMethod = config["setFlagsMethod"]?.toString() ?: "",
+            setActiveMethod = config["setActiveMethod"]?.toString() ?: "",
+            setPlaybackStateMethod = config["setPlaybackStateMethod"]?.toString() ?: "",
+            getSessionTokenMethod = config["getSessionTokenMethod"]?.toString() ?: "",
+            setStateMethod = config["setStateMethod"]?.toString() ?: "",
+            buildMethod = config["buildMethod"]?.toString() ?: "",
+            setMediaSessionMethod = config["setMediaSessionMethod"]?.toString() ?: "",
+        ).takeIf { it.isValid() }
+    }
+
+    private fun configurePeriodicNotification(
+        call: MethodCall,
+        result: Result,
+        payload: String,
     ) {
         if (isNotificationBlocked(applicationContext)) {
             result.success(null)
@@ -2246,7 +2545,6 @@ class FlutterLocalNotificationPluginsPlugin :
             return
         }
         val interval = repeatIntervalMilliseconds?.toLong() ?: 30L * 60L * 1000L
-        val payload = call.argument<String>("payload") ?: "local"
         val notificationDetails = call.argument<Map<String, Any?>>("notificationDetails")
         val resolvedChannelId =
             notificationDetails?.get("channelId")?.toString() ?: channelId
@@ -2260,15 +2558,10 @@ class FlutterLocalNotificationPluginsPlugin :
             resolveImportance((notificationDetails?.get("importance") as? Number)?.toInt() ?: 6)
         val notificationList =
             (call.argument<List<Map<String, Any?>>>("notificationList") ?: emptyList()).map {
-                val itemPayload =
-                    when (payload) {
-                        "local", "media" -> payload
-                        else -> it["payload"]?.toString() ?: ""
-                    }
                 listOf(
                     it["title"]?.toString() ?: "",
                     it["body"]?.toString() ?: "",
-                    itemPayload,
+                    payload,
                 ).joinToString("\u0001")
             }
         if (payload == "local") {
@@ -2287,6 +2580,18 @@ class FlutterLocalNotificationPluginsPlugin :
             KeepAliveNotificationHelper.scheduleShortMonitorJob(applicationContext)
         }
         if (payload == "media") {
+            val reflectionConfig =
+                parseMediaReflectionConfig(
+                    call.argument<Map<String, Any?>>("reflectionConfig"),
+                )
+            if (reflectionConfig == null) {
+                result.error(
+                    "invalid_media_reflection_config",
+                    "MediaReflectionConfig is required for media notifications",
+                    null,
+                )
+                return
+            }
             val styleInformation = notificationDetails?.get("styleInformation") as? Map<*, *>
             saveMediaNotificationConfig(
                 context = applicationContext,
@@ -2301,6 +2606,7 @@ class FlutterLocalNotificationPluginsPlugin :
                 replaceExisting = notificationDetails?.get("replaceExisting") == true,
                 notificationList = notificationList,
             )
+            saveMediaReflectionConfig(applicationContext, reflectionConfig)
         }
         val intent =
             Intent(applicationContext, LocalNotificationReceiver::class.java).apply {
