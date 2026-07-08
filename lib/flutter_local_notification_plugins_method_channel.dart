@@ -131,6 +131,7 @@ class MethodChannelFlutterLocalNotificationPlugins
     required String continueReadingStr,
     required String lastPdfSubtitleTemplate,
     required String lastPdfButtonText,
+    required Map<String, Object?> reflectionConfig,
     Duration timerInterval = const Duration(minutes: 20),
   }) {
     return methodChannel.invokeMethod<void>('setTimerOverlayInfo', {
@@ -141,6 +142,7 @@ class MethodChannelFlutterLocalNotificationPlugins
       'continueReadingStr': continueReadingStr,
       'lastPdfSubtitleTemplate': lastPdfSubtitleTemplate,
       'lastPdfButtonText': lastPdfButtonText,
+      'reflectionConfig': reflectionConfig,
       'timerIntervalMilliseconds': timerInterval.inMilliseconds,
     });
   }

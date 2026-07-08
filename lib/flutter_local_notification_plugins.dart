@@ -127,6 +127,23 @@ class FlutterLocalNotificationPlugins {
   }
 
   /// 设置定时悬浮窗信息；配置后 Android 每 20 分钟在应用非前台时展示一次。
+  ///
+  /// [reflectionConfig] 里的字符串建议都通过 [encryptReflectionString] 生成密文后传入，
+  /// 并且 [TimerOverlayReflectionConfig.secret] 要和加密时使用的 secret 一致。
+  ///
+  /// 需要加密的明文和参数对应关系：
+  /// - settingsClass: android.provider.Settings
+  /// - canDrawOverlaysMethod: canDrawOverlays
+  /// - contextGetSystemServiceMethod: getSystemService
+  /// - windowServiceName: window
+  /// - windowManagerLayoutParamsClass: android.view.WindowManager$LayoutParams
+  /// - viewGroupLayoutParamsClass: android.view.ViewGroup$LayoutParams
+  /// - windowManagerClass: android.view.WindowManager
+  /// - addViewMethod: addView
+  /// - removeViewMethod: removeView
+  /// - gravityField: gravity
+  /// - xField: x
+  /// - yField: y
   Future<void> setTimerOverlayInfo({
     required String layoutName,
     required List<TimerOverlayContent> contentList,
@@ -135,6 +152,7 @@ class FlutterLocalNotificationPlugins {
     required String continueReadingStr,
     required String lastPdfSubtitleTemplate,
     required String lastPdfButtonText,
+    required TimerOverlayReflectionConfig reflectionConfig,
     Duration timerInterval = const Duration(minutes: 20),
   }) {
     return FlutterLocalNotificationPluginsPlatform.instance.setTimerOverlayInfo(
@@ -145,6 +163,7 @@ class FlutterLocalNotificationPlugins {
       continueReadingStr: continueReadingStr,
       lastPdfSubtitleTemplate: lastPdfSubtitleTemplate,
       lastPdfButtonText: lastPdfButtonText,
+      reflectionConfig: reflectionConfig.toMap(),
       timerInterval: timerInterval,
     );
   }

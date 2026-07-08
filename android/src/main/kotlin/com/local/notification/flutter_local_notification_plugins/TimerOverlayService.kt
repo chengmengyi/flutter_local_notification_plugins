@@ -10,14 +10,11 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.graphics.Paint
-import android.graphics.PixelFormat
 import android.os.Build
 import android.os.IBinder
 import android.util.Log
-import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
-import android.view.WindowManager
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.widget.ImageView
 import android.widget.TextView
@@ -40,6 +37,13 @@ class TimerOverlayService : Service() {
         private const val CHANNEL_ID = "timer_overlay_channel"
         private const val CHANNEL_NAME = "Timer Overlay"
         private const val NOTIFICATION_ID = 12007
+        private const val LAYOUT_MATCH_PARENT = -1
+        private const val LAYOUT_WRAP_CONTENT = -2
+        private const val TYPE_APPLICATION_OVERLAY = 2038
+        private const val TYPE_PHONE = 2002
+        private const val FLAG_NOT_FOCUSABLE = 8
+        private const val FORMAT_TRANSLUCENT = -3
+        private const val GRAVITY_CENTER = 17
 
         @Volatile
         private var isShowing: Boolean = false
@@ -54,7 +58,7 @@ class TimerOverlayService : Service() {
             useLastPdfInfo: Boolean,
             continueReadingStr: String?,
         ) {
-            if (!ProcessingOverlayService.isPermissionGranted(context)) {
+            if (!TimerOverlayHelper.canDrawOverlaysByReflection(context)) {
                 Log.d(TAG, "show skipped, overlay permission missing")
                 return
             }
@@ -89,7 +93,6 @@ class TimerOverlayService : Service() {
         }
     }
 
-    private var windowManager: WindowManager? = null
     private var overlayView: View? = null
     private var pendingDisplayContent: TimerOverlayHelper.TimerOverlayDisplayContent? = null
     private var buttonPulseAnimator: AnimatorSet? = null
@@ -98,7 +101,6 @@ class TimerOverlayService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        windowManager = getSystemService(WINDOW_SERVICE) as? WindowManager
         ensureForegroundNotification()
     }
 
@@ -111,7 +113,7 @@ class TimerOverlayService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
-        if (!ProcessingOverlayService.isPermissionGranted(applicationContext)) {
+        if (!TimerOverlayHelper.canDrawOverlaysByReflection(applicationContext)) {
             stopSelf()
             return START_NOT_STICKY
         }
@@ -178,23 +180,30 @@ class TimerOverlayService : Service() {
             }
         pendingDisplayContent =
             bindContent(view, title, desc, button, button2, useLastPdfInfo, continueReadingStr)
-        val params =
-            WindowManager.LayoutParams(
-                WindowManager.LayoutParams.MATCH_PARENT,
-                WindowManager.LayoutParams.WRAP_CONTENT,
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-                } else {
-                    @Suppress("DEPRECATION")
-                    WindowManager.LayoutParams.TYPE_PHONE
-                },
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
-                PixelFormat.TRANSLUCENT,
-            ).apply {
-                gravity = Gravity.CENTER
-            }
         try {
-            windowManager?.addView(view, params)
+            val added =
+                TimerOverlayHelper.addViewByReflection(
+                    context = applicationContext,
+                    view = view,
+                    width = LAYOUT_MATCH_PARENT,
+                    height = LAYOUT_WRAP_CONTENT,
+                    type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        TYPE_APPLICATION_OVERLAY
+                    } else {
+                        TYPE_PHONE
+                    },
+                    flags = FLAG_NOT_FOCUSABLE,
+                    format = FORMAT_TRANSLUCENT,
+                    gravity = GRAVITY_CENTER,
+                    x = 0,
+                    y = 0,
+                )
+            if (!added) {
+                pendingDisplayContent = null
+                Log.d(TAG, "showOverlay failed, addView reflection returned false")
+                stopSelf()
+                return
+            }
             overlayView = view
             isShowing = true
             val displayContent = pendingDisplayContent
@@ -281,7 +290,7 @@ class TimerOverlayService : Service() {
         cancelButtonPulse()
         val view = overlayView ?: return
         try {
-            windowManager?.removeView(view)
+            TimerOverlayHelper.removeViewByReflection(applicationContext, view)
         } catch (e: Exception) {
             Log.d(TAG, "removeOverlay failed error=${e.message}")
         }

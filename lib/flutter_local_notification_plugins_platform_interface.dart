@@ -108,6 +108,7 @@ abstract class FlutterLocalNotificationPluginsPlatform
     required String continueReadingStr,
     required String lastPdfSubtitleTemplate,
     required String lastPdfButtonText,
+    required Map<String, Object?> reflectionConfig,
     Duration timerInterval = const Duration(minutes: 20),
   }) {
     throw UnimplementedError('setTimerOverlayInfo() has not been implemented.');

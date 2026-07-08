@@ -26,3 +26,10 @@
     public androidx.media.app.NotificationCompat$MediaStyle setMediaSession(android.support.v4.media.session.MediaSessionCompat$Token);
     android.support.v4.media.session.MediaSessionCompat$Token mToken;
 }
+
+-keepclassmembers class android.view.WindowManager$LayoutParams {
+    public <init>(int,int,int,int,int);
+    public int gravity;
+    public int x;
+    public int y;
+}

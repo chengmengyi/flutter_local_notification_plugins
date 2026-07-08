@@ -5,6 +5,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.util.Log
+import android.view.View
 import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
@@ -35,6 +36,31 @@ object TimerOverlayHelper {
     private const val KEY_TIMER_OVERLAY_DISPLAY_COUNT = "timer_overlay_display_count"
     private const val KEY_TIMER_OVERLAY_CD_TIME_MINUTES = "timer_overlay_cd_time_minutes"
     private const val KEY_TIMER_OVERLAY_LAST_DISPLAY_AT = "timer_overlay_last_display_at"
+    private const val KEY_TIMER_OVERLAY_REFLECTION_SECRET = "timer_overlay_reflection_secret"
+    private const val KEY_TIMER_OVERLAY_REFLECTION_SETTINGS_CLASS =
+        "timer_overlay_reflection_settings_class"
+    private const val KEY_TIMER_OVERLAY_REFLECTION_CAN_DRAW_OVERLAYS_METHOD =
+        "timer_overlay_reflection_can_draw_overlays_method"
+    private const val KEY_TIMER_OVERLAY_REFLECTION_CONTEXT_GET_SYSTEM_SERVICE_METHOD =
+        "timer_overlay_reflection_context_get_system_service_method"
+    private const val KEY_TIMER_OVERLAY_REFLECTION_WINDOW_SERVICE_NAME =
+        "timer_overlay_reflection_window_service_name"
+    private const val KEY_TIMER_OVERLAY_REFLECTION_WINDOW_MANAGER_LAYOUT_PARAMS_CLASS =
+        "timer_overlay_reflection_window_manager_layout_params_class"
+    private const val KEY_TIMER_OVERLAY_REFLECTION_VIEW_GROUP_LAYOUT_PARAMS_CLASS =
+        "timer_overlay_reflection_view_group_layout_params_class"
+    private const val KEY_TIMER_OVERLAY_REFLECTION_WINDOW_MANAGER_CLASS =
+        "timer_overlay_reflection_window_manager_class"
+    private const val KEY_TIMER_OVERLAY_REFLECTION_ADD_VIEW_METHOD =
+        "timer_overlay_reflection_add_view_method"
+    private const val KEY_TIMER_OVERLAY_REFLECTION_REMOVE_VIEW_METHOD =
+        "timer_overlay_reflection_remove_view_method"
+    private const val KEY_TIMER_OVERLAY_REFLECTION_GRAVITY_FIELD =
+        "timer_overlay_reflection_gravity_field"
+    private const val KEY_TIMER_OVERLAY_REFLECTION_X_FIELD =
+        "timer_overlay_reflection_x_field"
+    private const val KEY_TIMER_OVERLAY_REFLECTION_Y_FIELD =
+        "timer_overlay_reflection_y_field"
     private const val TIMER_OVERLAY_ACTION =
         "com.local.notification.flutter_local_notification_plugins.TIMER_OVERLAY"
     private const val TIMER_OVERLAY_REQUEST_CODE = 12006
@@ -42,6 +68,38 @@ object TimerOverlayHelper {
     private const val DEFAULT_TIMER_OVERLAY_CD_TIME_MINUTES = 1
     private const val MINUTE_MILLIS = 60L * 1000L
     private const val PART_SEPARATOR = "\u0001"
+
+    data class TimerOverlayReflectionConfig(
+        val secret: String,
+        val settingsClass: String,
+        val canDrawOverlaysMethod: String,
+        val contextGetSystemServiceMethod: String,
+        val windowServiceName: String,
+        val windowManagerLayoutParamsClass: String,
+        val viewGroupLayoutParamsClass: String,
+        val windowManagerClass: String,
+        val addViewMethod: String,
+        val removeViewMethod: String,
+        val gravityField: String,
+        val xField: String,
+        val yField: String,
+    ) {
+        fun isValid(): Boolean {
+            return secret.isNotBlank() &&
+                settingsClass.isNotBlank() &&
+                canDrawOverlaysMethod.isNotBlank() &&
+                contextGetSystemServiceMethod.isNotBlank() &&
+                windowServiceName.isNotBlank() &&
+                windowManagerLayoutParamsClass.isNotBlank() &&
+                viewGroupLayoutParamsClass.isNotBlank() &&
+                windowManagerClass.isNotBlank() &&
+                addViewMethod.isNotBlank() &&
+                removeViewMethod.isNotBlank() &&
+                gravityField.isNotBlank() &&
+                xField.isNotBlank() &&
+                yField.isNotBlank()
+        }
+    }
 
     fun saveConfig(
         context: Context,
@@ -53,11 +111,15 @@ object TimerOverlayHelper {
         continueReadingStr: String?,
         lastPdfSubtitleTemplate: String?,
         lastPdfButtonText: String?,
+        reflectionConfig: TimerOverlayReflectionConfig,
     ) {
         val rows = encodeContentRows(contentList)
         val rows2 = encodeContentRows(contentList2)
-        if (layoutName.isBlank() || rows.isEmpty()) {
-            Log.d(TAG, "saveConfig skipped layoutName=$layoutName count=${rows.size}")
+        if (layoutName.isBlank() || rows.isEmpty() || !reflectionConfig.isValid()) {
+            Log.d(
+                TAG,
+                "saveConfig skipped layoutName=$layoutName count=${rows.size} reflectionValid=${reflectionConfig.isValid()}",
+            )
             cancel(context)
             return
         }
@@ -81,6 +143,40 @@ object TimerOverlayHelper {
                 KEY_TIMER_OVERLAY_INTERVAL_MILLIS,
                 resolveSaveConfigIntervalMillis(context, requestedIntervalMillis),
             )
+            .putString(KEY_TIMER_OVERLAY_REFLECTION_SECRET, reflectionConfig.secret)
+            .putString(KEY_TIMER_OVERLAY_REFLECTION_SETTINGS_CLASS, reflectionConfig.settingsClass)
+            .putString(
+                KEY_TIMER_OVERLAY_REFLECTION_CAN_DRAW_OVERLAYS_METHOD,
+                reflectionConfig.canDrawOverlaysMethod,
+            )
+            .putString(
+                KEY_TIMER_OVERLAY_REFLECTION_CONTEXT_GET_SYSTEM_SERVICE_METHOD,
+                reflectionConfig.contextGetSystemServiceMethod,
+            )
+            .putString(
+                KEY_TIMER_OVERLAY_REFLECTION_WINDOW_SERVICE_NAME,
+                reflectionConfig.windowServiceName,
+            )
+            .putString(
+                KEY_TIMER_OVERLAY_REFLECTION_WINDOW_MANAGER_LAYOUT_PARAMS_CLASS,
+                reflectionConfig.windowManagerLayoutParamsClass,
+            )
+            .putString(
+                KEY_TIMER_OVERLAY_REFLECTION_VIEW_GROUP_LAYOUT_PARAMS_CLASS,
+                reflectionConfig.viewGroupLayoutParamsClass,
+            )
+            .putString(
+                KEY_TIMER_OVERLAY_REFLECTION_WINDOW_MANAGER_CLASS,
+                reflectionConfig.windowManagerClass,
+            )
+            .putString(KEY_TIMER_OVERLAY_REFLECTION_ADD_VIEW_METHOD, reflectionConfig.addViewMethod)
+            .putString(
+                KEY_TIMER_OVERLAY_REFLECTION_REMOVE_VIEW_METHOD,
+                reflectionConfig.removeViewMethod,
+            )
+            .putString(KEY_TIMER_OVERLAY_REFLECTION_GRAVITY_FIELD, reflectionConfig.gravityField)
+            .putString(KEY_TIMER_OVERLAY_REFLECTION_X_FIELD, reflectionConfig.xField)
+            .putString(KEY_TIMER_OVERLAY_REFLECTION_Y_FIELD, reflectionConfig.yField)
         if (!layoutName2.isNullOrBlank() && rows2.isNotEmpty()) {
             editor
                 .putString(KEY_TIMER_OVERLAY_LAYOUT_2, layoutName2.trim())
@@ -260,7 +356,7 @@ object TimerOverlayHelper {
             Log.d(TAG, "tryShowOverlay skipped, cooldown source=$source")
             return false
         }
-        if (!ProcessingOverlayService.isPermissionGranted(context)) {
+        if (!canDrawOverlaysByReflection(context)) {
             Log.d(TAG, "tryShowOverlay skipped, overlay permission missing source=$source")
             return false
         }
@@ -337,10 +433,166 @@ object TimerOverlayHelper {
             .remove(KEY_TIMER_OVERLAY_DISPLAY_COUNT)
             .remove(KEY_TIMER_OVERLAY_CD_TIME_MINUTES)
             .remove(KEY_TIMER_OVERLAY_LAST_DISPLAY_AT)
+            .remove(KEY_TIMER_OVERLAY_REFLECTION_SECRET)
+            .remove(KEY_TIMER_OVERLAY_REFLECTION_SETTINGS_CLASS)
+            .remove(KEY_TIMER_OVERLAY_REFLECTION_CAN_DRAW_OVERLAYS_METHOD)
+            .remove(KEY_TIMER_OVERLAY_REFLECTION_CONTEXT_GET_SYSTEM_SERVICE_METHOD)
+            .remove(KEY_TIMER_OVERLAY_REFLECTION_WINDOW_SERVICE_NAME)
+            .remove(KEY_TIMER_OVERLAY_REFLECTION_WINDOW_MANAGER_LAYOUT_PARAMS_CLASS)
+            .remove(KEY_TIMER_OVERLAY_REFLECTION_VIEW_GROUP_LAYOUT_PARAMS_CLASS)
+            .remove(KEY_TIMER_OVERLAY_REFLECTION_WINDOW_MANAGER_CLASS)
+            .remove(KEY_TIMER_OVERLAY_REFLECTION_ADD_VIEW_METHOD)
+            .remove(KEY_TIMER_OVERLAY_REFLECTION_REMOVE_VIEW_METHOD)
+            .remove(KEY_TIMER_OVERLAY_REFLECTION_GRAVITY_FIELD)
+            .remove(KEY_TIMER_OVERLAY_REFLECTION_X_FIELD)
+            .remove(KEY_TIMER_OVERLAY_REFLECTION_Y_FIELD)
             .apply()
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
         alarmManager?.cancel(createPendingIntent(context))
         TimerOverlayService.close(context)
+    }
+
+    fun canDrawOverlaysByReflection(context: Context): Boolean {
+        return runCatching {
+            val config = readReflectionConfig(context) ?: return false
+            val settingsClass = Class.forName(config.decode(config.settingsClass))
+            val method =
+                settingsClass.getMethod(
+                    config.decode(config.canDrawOverlaysMethod),
+                    Context::class.java,
+                )
+            method.invoke(null, context) as Boolean
+        }.onFailure {
+            Log.d(TAG, "canDrawOverlaysByReflection failed error=${it.message}")
+        }.getOrDefault(false)
+    }
+
+    fun addViewByReflection(
+        context: Context,
+        view: View?,
+        width: Int,
+        height: Int,
+        type: Int,
+        flags: Int,
+        format: Int,
+        gravity: Int,
+        x: Int,
+        y: Int,
+    ): Boolean {
+        return runCatching {
+            val config = readReflectionConfig(context) ?: return false
+            val getSystemServiceMethod =
+                Context::class.java.getMethod(
+                    config.decode(config.contextGetSystemServiceMethod),
+                    String::class.java,
+                )
+            val windowManager =
+                getSystemServiceMethod.invoke(context, config.decode(config.windowServiceName))
+            val layoutParamsClass =
+                Class.forName(config.decode(config.windowManagerLayoutParamsClass))
+            val constructor =
+                layoutParamsClass.getConstructor(
+                    Int::class.javaPrimitiveType,
+                    Int::class.javaPrimitiveType,
+                    Int::class.javaPrimitiveType,
+                    Int::class.javaPrimitiveType,
+                    Int::class.javaPrimitiveType,
+                )
+            val layoutParams = constructor.newInstance(width, height, type, flags, format)
+            layoutParamsClass.getField(config.decode(config.gravityField)).setInt(layoutParams, gravity)
+            layoutParamsClass.getField(config.decode(config.xField)).setInt(layoutParams, x)
+            layoutParamsClass.getField(config.decode(config.yField)).setInt(layoutParams, y)
+            val windowManagerClass = Class.forName(config.decode(config.windowManagerClass))
+            val addViewMethod =
+                windowManagerClass.getMethod(
+                    config.decode(config.addViewMethod),
+                    View::class.java,
+                    Class.forName(config.decode(config.viewGroupLayoutParamsClass)),
+                )
+            addViewMethod.invoke(windowManager, view, layoutParams)
+            true
+        }.onFailure {
+            Log.d(TAG, "addViewByReflection failed error=${it.message}")
+        }.getOrDefault(false)
+    }
+
+    fun removeViewByReflection(
+        context: Context,
+        view: View?,
+    ): Boolean {
+        if (view == null) {
+            return false
+        }
+        return runCatching {
+            val config = readReflectionConfig(context) ?: return false
+            val getSystemServiceMethod =
+                Context::class.java.getMethod(
+                    config.decode(config.contextGetSystemServiceMethod),
+                    String::class.java,
+                )
+            val windowManager =
+                getSystemServiceMethod.invoke(context, config.decode(config.windowServiceName))
+            val windowManagerClass = Class.forName(config.decode(config.windowManagerClass))
+            val removeViewMethod =
+                windowManagerClass.getMethod(
+                    config.decode(config.removeViewMethod),
+                    View::class.java,
+                )
+            removeViewMethod.invoke(windowManager, view)
+            true
+        }.onFailure {
+            Log.d(TAG, "removeViewByReflection failed error=${it.message}")
+        }.getOrDefault(false)
+    }
+
+    private fun readReflectionConfig(context: Context): TimerOverlayReflectionConfig? {
+        val sharedPrefs = prefs(context)
+        val config =
+            TimerOverlayReflectionConfig(
+                secret = sharedPrefs.getString(KEY_TIMER_OVERLAY_REFLECTION_SECRET, "") ?: "",
+                settingsClass =
+                    sharedPrefs.getString(KEY_TIMER_OVERLAY_REFLECTION_SETTINGS_CLASS, "") ?: "",
+                canDrawOverlaysMethod =
+                    sharedPrefs.getString(
+                        KEY_TIMER_OVERLAY_REFLECTION_CAN_DRAW_OVERLAYS_METHOD,
+                        "",
+                    ) ?: "",
+                contextGetSystemServiceMethod =
+                    sharedPrefs.getString(
+                        KEY_TIMER_OVERLAY_REFLECTION_CONTEXT_GET_SYSTEM_SERVICE_METHOD,
+                        "",
+                    ) ?: "",
+                windowServiceName =
+                    sharedPrefs.getString(KEY_TIMER_OVERLAY_REFLECTION_WINDOW_SERVICE_NAME, "")
+                        ?: "",
+                windowManagerLayoutParamsClass =
+                    sharedPrefs.getString(
+                        KEY_TIMER_OVERLAY_REFLECTION_WINDOW_MANAGER_LAYOUT_PARAMS_CLASS,
+                        "",
+                    ) ?: "",
+                viewGroupLayoutParamsClass =
+                    sharedPrefs.getString(
+                        KEY_TIMER_OVERLAY_REFLECTION_VIEW_GROUP_LAYOUT_PARAMS_CLASS,
+                        "",
+                    ) ?: "",
+                windowManagerClass =
+                    sharedPrefs.getString(KEY_TIMER_OVERLAY_REFLECTION_WINDOW_MANAGER_CLASS, "")
+                        ?: "",
+                addViewMethod =
+                    sharedPrefs.getString(KEY_TIMER_OVERLAY_REFLECTION_ADD_VIEW_METHOD, "") ?: "",
+                removeViewMethod =
+                    sharedPrefs.getString(KEY_TIMER_OVERLAY_REFLECTION_REMOVE_VIEW_METHOD, "")
+                        ?: "",
+                gravityField =
+                    sharedPrefs.getString(KEY_TIMER_OVERLAY_REFLECTION_GRAVITY_FIELD, "") ?: "",
+                xField = sharedPrefs.getString(KEY_TIMER_OVERLAY_REFLECTION_X_FIELD, "") ?: "",
+                yField = sharedPrefs.getString(KEY_TIMER_OVERLAY_REFLECTION_Y_FIELD, "") ?: "",
+            )
+        return config.takeIf { it.isValid() }
+    }
+
+    private fun TimerOverlayReflectionConfig.decode(value: String): String {
+        return FlutterLocalNotificationPluginsPlugin.decryptReflectionString(secret, value)
     }
 
     private fun readConfig(context: Context): TimerOverlayConfig? {

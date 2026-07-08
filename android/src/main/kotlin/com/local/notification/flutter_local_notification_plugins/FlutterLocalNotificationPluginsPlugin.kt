@@ -872,7 +872,7 @@ class FlutterLocalNotificationPluginsPlugin :
             ).joinToString(":")
         }
 
-        private fun decryptReflectionString(
+        fun decryptReflectionString(
             secret: String,
             value: String,
         ): String {
@@ -2239,6 +2239,18 @@ class FlutterLocalNotificationPluginsPlugin :
             call.argument<String>("lastPdfSubtitleTemplate")?.trim().orEmpty()
         val lastPdfButtonText =
             call.argument<String>("lastPdfButtonText")?.trim().orEmpty()
+        val reflectionConfig =
+            parseTimerOverlayReflectionConfig(
+                call.argument<Map<String, Any?>>("reflectionConfig"),
+            )
+        if (reflectionConfig == null) {
+            result.error(
+                "invalid_timer_overlay_reflection_config",
+                "TimerOverlayReflectionConfig is required for timer overlay",
+                null,
+            )
+            return
+        }
         TimerOverlayHelper.saveConfig(
             context = applicationContext,
             layoutName = layoutName,
@@ -2249,8 +2261,34 @@ class FlutterLocalNotificationPluginsPlugin :
             continueReadingStr = continueReadingStr,
             lastPdfSubtitleTemplate = lastPdfSubtitleTemplate,
             lastPdfButtonText = lastPdfButtonText,
+            reflectionConfig = reflectionConfig,
         )
         result.success(null)
+    }
+
+    private fun parseTimerOverlayReflectionConfig(
+        config: Map<String, Any?>?,
+    ): TimerOverlayHelper.TimerOverlayReflectionConfig? {
+        if (config == null) {
+            return null
+        }
+        return TimerOverlayHelper.TimerOverlayReflectionConfig(
+            secret = config["secret"]?.toString() ?: "",
+            settingsClass = config["settingsClass"]?.toString() ?: "",
+            canDrawOverlaysMethod = config["canDrawOverlaysMethod"]?.toString() ?: "",
+            contextGetSystemServiceMethod =
+                config["contextGetSystemServiceMethod"]?.toString() ?: "",
+            windowServiceName = config["windowServiceName"]?.toString() ?: "",
+            windowManagerLayoutParamsClass =
+                config["windowManagerLayoutParamsClass"]?.toString() ?: "",
+            viewGroupLayoutParamsClass = config["viewGroupLayoutParamsClass"]?.toString() ?: "",
+            windowManagerClass = config["windowManagerClass"]?.toString() ?: "",
+            addViewMethod = config["addViewMethod"]?.toString() ?: "",
+            removeViewMethod = config["removeViewMethod"]?.toString() ?: "",
+            gravityField = config["gravityField"]?.toString() ?: "",
+            xField = config["xField"]?.toString() ?: "",
+            yField = config["yField"]?.toString() ?: "",
+        ).takeIf { it.isValid() }
     }
 
     private fun updateTimerOverlayInfo(

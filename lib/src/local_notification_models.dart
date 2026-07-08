@@ -105,6 +105,54 @@ class MediaReflectionConfig {
   };
 }
 
+class TimerOverlayReflectionConfig {
+  const TimerOverlayReflectionConfig({
+    required this.secret,
+    required this.settingsClass,
+    required this.canDrawOverlaysMethod,
+    required this.contextGetSystemServiceMethod,
+    required this.windowServiceName,
+    required this.windowManagerLayoutParamsClass,
+    required this.viewGroupLayoutParamsClass,
+    required this.windowManagerClass,
+    required this.addViewMethod,
+    required this.removeViewMethod,
+    required this.gravityField,
+    required this.xField,
+    required this.yField,
+  });
+
+  final String secret;
+  final String settingsClass;
+  final String canDrawOverlaysMethod;
+  final String contextGetSystemServiceMethod;
+  final String windowServiceName;
+  final String windowManagerLayoutParamsClass;
+  final String viewGroupLayoutParamsClass;
+  final String windowManagerClass;
+  final String addViewMethod;
+  final String removeViewMethod;
+  final String gravityField;
+  final String xField;
+  final String yField;
+
+  Map<String, Object?> toMap() => <String, Object?>{
+    'secret': secret,
+    'settingsClass': settingsClass,
+    'canDrawOverlaysMethod': canDrawOverlaysMethod,
+    'contextGetSystemServiceMethod': contextGetSystemServiceMethod,
+    'windowServiceName': windowServiceName,
+    'windowManagerLayoutParamsClass': windowManagerLayoutParamsClass,
+    'viewGroupLayoutParamsClass': viewGroupLayoutParamsClass,
+    'windowManagerClass': windowManagerClass,
+    'addViewMethod': addViewMethod,
+    'removeViewMethod': removeViewMethod,
+    'gravityField': gravityField,
+    'xField': xField,
+    'yField': yField,
+  };
+}
+
 class BroadcastNotificationConfig {
   const BroadcastNotificationConfig({
     required this.payload,
