@@ -279,6 +279,11 @@ class FlutterLocalNotificationPlugins {
     return FlutterLocalNotificationPluginsPlatform.instance.isSamsungDevice();
   }
 
+  /// 判断当前手机语言或地区是否为韩国。
+  Future<bool> isKoreanLocale() {
+    return FlutterLocalNotificationPluginsPlatform.instance.isKoreanLocale();
+  }
+
   /// 配置 Android 的 WorkManager 循环间隔。
   Future<void> configureAndroidWorkManager({
     Duration interval = _defaultWorkManagerInterval,

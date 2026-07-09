@@ -199,6 +199,11 @@ abstract class FlutterLocalNotificationPluginsPlatform
     throw UnimplementedError('isSamsungDevice() has not been implemented.');
   }
 
+  /// 判断当前手机语言或地区是否为韩国。
+  Future<bool> isKoreanLocale() {
+    throw UnimplementedError('isKoreanLocale() has not been implemented.');
+  }
+
   /// 配置 Android 的 WorkManager 循环间隔。
   Future<void> configureAndroidWorkManager({
     Duration interval = const Duration(minutes: 60),

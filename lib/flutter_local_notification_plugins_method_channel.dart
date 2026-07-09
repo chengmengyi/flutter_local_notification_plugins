@@ -252,6 +252,13 @@ class MethodChannelFlutterLocalNotificationPlugins
     return result ?? false;
   }
 
+  /// 通过原生通道判断当前手机语言或地区是否为韩国。
+  @override
+  Future<bool> isKoreanLocale() async {
+    final result = await methodChannel.invokeMethod<bool>('isKoreanLocale');
+    return result ?? false;
+  }
+
   /// 通过原生通道配置 Android 的 WorkManager 循环间隔。
   @override
   Future<void> configureAndroidWorkManager({

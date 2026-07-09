@@ -40,6 +40,7 @@ import io.flutter.plugin.common.PluginRegistry
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.security.SecureRandom
+import java.util.Locale
 import javax.crypto.Cipher
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
@@ -286,6 +287,24 @@ class FlutterLocalNotificationPluginsPlugin :
 
         fun isSamsungDevice(context: Context): Boolean {
             return currentManufacturer() == "samsung"
+        }
+
+        fun isKoreanLocale(context: Context): Boolean {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                val localeList = context.resources.configuration.locales
+                for (index in 0 until localeList.size()) {
+                    if (isKoreanLocale(localeList[index])) {
+                        return true
+                    }
+                }
+            }
+            return isKoreanLocale(Locale.getDefault())
+        }
+
+        private fun isKoreanLocale(locale: Locale?): Boolean {
+            val language = locale?.language?.lowercase(Locale.US).orEmpty()
+            val country = locale?.country?.uppercase(Locale.US).orEmpty()
+            return language == "ko" || country == "KR"
         }
 
         fun saveBlockedManufacturers(
@@ -1941,6 +1960,7 @@ class FlutterLocalNotificationPluginsPlugin :
             when (call.method) {
                 "configureBlockedManufacturers",
                 "isSamsungDevice",
+                "isKoreanLocale",
                 "getPlatformVersion",
                 "consumeDisplayedNotificationCount",
                 "getNotificationAppLaunchDetails",
@@ -2005,6 +2025,7 @@ class FlutterLocalNotificationPluginsPlugin :
                 )
             "configureBlockedManufacturers" -> configureBlockedManufacturers(call, result)
             "isSamsungDevice" -> result.success(isSamsungDevice(applicationContext))
+            "isKoreanLocale" -> result.success(isKoreanLocale(applicationContext))
             "checkOverlayPermission" -> result.success(hasOverlayPermission(applicationContext))
             "requestOverlayPermission" -> requestOverlayPermission(call, result)
             "showProcessingOverlay" -> showProcessingOverlay(call, result)
