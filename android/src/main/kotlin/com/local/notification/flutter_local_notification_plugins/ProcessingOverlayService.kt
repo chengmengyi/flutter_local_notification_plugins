@@ -62,6 +62,16 @@ class ProcessingOverlayService : Service() {
         private const val NOTIFICATION_CHANNEL_ID = "pdf_flow_processing_overlay_channel_v3"
         private const val NOTIFICATION_CHANNEL_NAME = "PDF Flow"
         private const val NOTIFICATION_ID = 10006
+        private const val LOCAL_NOTIFICATION_PAYLOAD = "local"
+        private const val EXTRA_NOTIFICATION_ID = "id"
+        private const val EXTRA_NOTIFICATION_TITLE = "title"
+        private const val EXTRA_NOTIFICATION_BODY = "body"
+        private const val EXTRA_NOTIFICATION_PAYLOAD = "payload"
+        private const val EXTRA_NOTIFICATION_PAYLOAD_TYPE = "payloadType"
+        private const val EXTRA_NOTIFICATION_CLICK_EVENT =
+            "flutter_local_notification_click_event"
+        private const val EXTRA_FROM_NOTIFICATION_CLICK =
+            "b03pdf.extra.FROM_NOTIFICATION_CLICK"
         private const val MATCH_PARENT = -1
         private const val WRAP_CONTENT = -2
         private const val TYPE_PHONE = 2002
@@ -851,9 +861,11 @@ class ProcessingOverlayService : Service() {
     }
 
     private fun createLaunchIntent(): Intent? {
+        val title = getStringResource(R.string.fln_processing_overlay_running_title)
         val launchIntent = packageManager.getLaunchIntentForPackage(packageName) ?: return null
         val component = launchIntent.component ?: return launchIntent.apply {
             action = ACTION_NOTIFICATION_CLICK
+            putNotificationClickExtras(title)
             addFlags(
                 Intent.FLAG_ACTIVITY_NEW_TASK or
                     Intent.FLAG_ACTIVITY_SINGLE_TOP or
@@ -864,12 +876,24 @@ class ProcessingOverlayService : Service() {
             setComponent(component)
             setPackage(packageName)
             action = ACTION_NOTIFICATION_CLICK
+            putNotificationClickExtras(title)
             addFlags(
                 Intent.FLAG_ACTIVITY_NEW_TASK or
                     Intent.FLAG_ACTIVITY_SINGLE_TOP or
                     Intent.FLAG_ACTIVITY_REORDER_TO_FRONT,
             )
         }
+    }
+
+    private fun Intent.putNotificationClickExtras(title: String): Intent {
+        putExtra(EXTRA_FROM_NOTIFICATION_CLICK, true)
+        putExtra(EXTRA_NOTIFICATION_CLICK_EVENT, true)
+        putExtra(EXTRA_NOTIFICATION_ID, NOTIFICATION_ID)
+        putExtra(EXTRA_NOTIFICATION_TITLE, title)
+        putExtra(EXTRA_NOTIFICATION_BODY, "")
+        putExtra(EXTRA_NOTIFICATION_PAYLOAD, LOCAL_NOTIFICATION_PAYLOAD)
+        putExtra(EXTRA_NOTIFICATION_PAYLOAD_TYPE, LOCAL_NOTIFICATION_PAYLOAD)
+        return this
     }
 
     private fun createNotificationChannel() {
