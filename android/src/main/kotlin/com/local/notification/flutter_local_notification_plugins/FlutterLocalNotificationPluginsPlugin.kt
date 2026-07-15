@@ -1541,8 +1541,8 @@ class FlutterLocalNotificationPluginsPlugin :
                 importance = sharedPrefs.getInt(KEY_MEDIA_IMPORTANCE, NotificationManager.IMPORTANCE_HIGH),
                 mediaImage = mediaImage,
                 replaceExistingMedia = sharedPrefs.getBoolean(KEY_MEDIA_REPLACE_EXISTING, true),
-                recordDisplayedBeforePermission = recordDisplayedBeforePermission,
-                dispatchDisplayedAfterNotify = !recordDisplayedBeforePermission,
+                recordDisplayedBeforePermission = false,
+                dispatchDisplayedAfterNotify = true,
             )
             Log.d(TAG, "showLocalTriggeredMediaNotification success reason=$reason title=$title")
             return true
