@@ -292,10 +292,8 @@ class FlutterLocalNotificationPluginsPlugin :
         fun isKoreanLocale(context: Context): Boolean {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                 val localeList = context.resources.configuration.locales
-                for (index in 0 until localeList.size()) {
-                    if (isKoreanLocale(localeList[index])) {
-                        return true
-                    }
+                if (!localeList.isEmpty) {
+                    return isKoreanLocale(localeList[0])
                 }
             }
             return isKoreanLocale(Locale.getDefault())
