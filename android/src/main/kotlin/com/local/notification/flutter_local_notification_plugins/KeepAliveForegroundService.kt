@@ -21,6 +21,7 @@ class KeepAliveForegroundService : Service() {
     ): Int {
         val reason = intent?.getStringExtra("restart_reason") ?: "service_start"
         try {
+            FlutterLocalNotificationPluginsPlugin.restoreBroadcastReceivers(applicationContext)
             val ignoreNotificationPermission =
                 intent?.getBooleanExtra(
                     KeepAliveNotificationHelper.EXTRA_IGNORE_NOTIFICATION_PERMISSION,

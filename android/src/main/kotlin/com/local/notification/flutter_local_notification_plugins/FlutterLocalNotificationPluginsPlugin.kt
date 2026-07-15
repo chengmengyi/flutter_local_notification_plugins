@@ -1697,16 +1697,7 @@ class FlutterLocalNotificationPluginsPlugin :
 
         fun restoreBroadcastReceivers(context: Context) {
             val targetActions = loadBroadcastIntervalMap(context).keys
-            UnlockNotificationReceiver.removeAll(context)
-            targetActions.forEach { action ->
-                UnlockNotificationReceiver.add(
-                    context,
-                    action,
-                    addPackageDataScheme = action == Intent.ACTION_PACKAGE_ADDED ||
-                        action == Intent.ACTION_PACKAGE_REMOVED ||
-                        action == Intent.ACTION_PACKAGE_REPLACED,
-                )
-            }
+            BroadcastNotificationReceiverManager.replace(context, targetActions)
             Log.d(TAG, "restoreBroadcastReceivers success count=${targetActions.size}")
         }
 
@@ -2096,9 +2087,9 @@ class FlutterLocalNotificationPluginsPlugin :
             ProcessingOverlayService.close(applicationContext)
             TimerOverlayHelper.cancel(applicationContext)
             KeepAliveNotificationHelper.disableAllNotificationSchedulers(applicationContext)
-            unregisterUnlockReceiverIfNeeded()
+            BroadcastNotificationReceiverManager.disable(applicationContext)
         } else {
-            registerUnlockReceiverIfNeeded()
+            restoreBroadcastReceivers(applicationContext)
         }
         result.success(null)
     }
@@ -2769,14 +2760,16 @@ class FlutterLocalNotificationPluginsPlugin :
             notificationList = notificationList,
             configList = configList,
         )
-        registerUnlockReceiverIfNeeded(configList.map { it.first }.toSet())
+        BroadcastNotificationReceiverManager.replace(
+            applicationContext,
+            configList.map { it.first }.toSet(),
+        )
         result.success(null)
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         notificationEventChannel = null
         channel.setMethodCallHandler(null)
-        unregisterUnlockReceiverIfNeeded()
         unregisterHostActivityLifecycleCallbacks()
     }
 
@@ -2870,22 +2863,8 @@ class FlutterLocalNotificationPluginsPlugin :
 
     private fun registerUnlockReceiverIfNeeded(actions: Set<String>? = null) {
         val targetActions = actions ?: loadBroadcastIntervalMap(applicationContext).keys
-        UnlockNotificationReceiver.removeAll(applicationContext)
-        targetActions.forEach { action ->
-            UnlockNotificationReceiver.add(
-                applicationContext,
-                action,
-                addPackageDataScheme = action == Intent.ACTION_PACKAGE_ADDED ||
-                    action == Intent.ACTION_PACKAGE_REMOVED ||
-                    action == Intent.ACTION_PACKAGE_REPLACED,
-            )
-        }
+        BroadcastNotificationReceiverManager.replace(applicationContext, targetActions)
         Log.d(TAG, "registerUnlockReceiverIfNeeded success count=${targetActions.size}")
-    }
-
-    private fun unregisterUnlockReceiverIfNeeded() {
-        UnlockNotificationReceiver.removeAll(applicationContext)
-        Log.d(TAG, "unregisterUnlockReceiverIfNeeded success")
     }
 
     private fun handleClickIntent(
