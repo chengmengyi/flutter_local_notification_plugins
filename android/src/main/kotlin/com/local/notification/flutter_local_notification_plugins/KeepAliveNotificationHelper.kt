@@ -55,6 +55,7 @@ object KeepAliveNotificationHelper {
     private const val KEY_LOCAL_IMPORTANCE = "keep_alive_local_importance"
     private const val KEY_LOCAL_NOTIFICATION_LIST = "keep_alive_local_notification_list"
     private const val KEY_WORK_MANAGER_INTERVAL_MILLIS = "keep_alive_work_manager_interval_millis"
+    private const val KEY_RECOVERY_ATTEMPT = "keep_alive_recovery_attempt"
     private const val DEFAULT_CHANNEL_ID = "default_notification_channel"
     private const val DEFAULT_CHANNEL_NAME = "Notifications"
     private const val DEFAULT_CHANNEL_DESCRIPTION = "App notifications"
@@ -67,8 +68,8 @@ object KeepAliveNotificationHelper {
     private const val EXTRA_FROM_NOTIFICATION_CLICK = "b03pdf.extra.FROM_NOTIFICATION_CLICK"
     private const val ACTION_NOTIFICATION_CLICK =
         "com.local.notification.flutter_local_notification_plugins.NOTIFICATION_CLICK"
-    private const val SHORTCUT_NOTIFICATION_ID = 10004
-    private const val SHORTCUT_CHANNEL_ID = "pdf_flow_shortcut_channel"
+    internal const val SHORTCUT_NOTIFICATION_ID = 10004
+    internal const val SHORTCUT_CHANNEL_ID = "pdf_flow_shortcut_channel_v2"
     private const val SHORTCUT_CHANNEL_NAME = "PDF Flow Shortcuts"
     private const val SHORTCUT_CHANNEL_DESCRIPTION = "PDF Flow shortcut notification"
     private const val PAYLOAD_SHORTCUT_HOME = "shortcut_home"
@@ -89,7 +90,16 @@ object KeepAliveNotificationHelper {
     private const val DEFAULT_WORK_INTERVAL_MILLIS = 60L * 60L * 1000L
     private const val RELEASE_PATROL_INTERVAL_MILLIS = 60L * 60L * 1000L
     private const val RELEASE_MONITOR_INTERVAL_MILLIS = 7_000L
+    private val RECOVERY_DELAYS_MILLIS =
+        longArrayOf(5_000L, 15_000L, 30_000L, 60_000L, 15L * 60L * 1000L)
     private const val MAX_ACTIVE_NOTIFICATIONS_BEFORE_POST = 22
+    private val PROTECTED_FOREGROUND_NOTIFICATION_IDS = setOf(10004, 10006, 12007)
+    private val PROTECTED_FOREGROUND_CHANNEL_IDS =
+        setOf(
+            SHORTCUT_CHANNEL_ID,
+            "pdf_flow_processing_overlay_channel_v3",
+            "timer_overlay_channel",
+        )
 
     data class ShortcutConfig(
         val homeText: String,
@@ -238,7 +248,6 @@ object KeepAliveNotificationHelper {
             Log.d(TAG, "showPersistentShortcutNotification blocked by manufacturer")
             return false
         }
-        showMediaBeforeKeepAliveAction(context, "show_persistent_shortcut")
         scheduleShortMonitorJob(context, immediate = true)
         scheduleLongPatrolJob(context)
         scheduleKeepAliveWork(context)
@@ -260,7 +269,6 @@ object KeepAliveNotificationHelper {
             startOrUpdateForegroundService(
                 context = context,
                 reason = "showPersistentShortcutNotification",
-                triggerMediaBeforeAction = false,
             )
             Log.d(TAG, "showPersistentShortcutNotification success")
             true
@@ -278,7 +286,7 @@ object KeepAliveNotificationHelper {
             channelId = SHORTCUT_CHANNEL_ID,
             channelName = SHORTCUT_CHANNEL_NAME,
             channelDescription = SHORTCUT_CHANNEL_DESCRIPTION,
-            importance = NotificationManager.IMPORTANCE_LOW,
+            importance = NotificationManager.IMPORTANCE_DEFAULT,
         )
         val homePendingIntent =
             createShortcutClickPendingIntent(
@@ -466,14 +474,10 @@ object KeepAliveNotificationHelper {
         context: Context,
         reason: String,
         ignoreNotificationPermission: Boolean = false,
-        triggerMediaBeforeAction: Boolean = true,
     ): Boolean {
         if (FlutterLocalNotificationPluginsPlugin.isNotificationBlocked(context)) {
             Log.d(TAG, "startOrUpdateForegroundService blocked by manufacturer")
             return false
-        }
-        if (triggerMediaBeforeAction) {
-            showMediaBeforeKeepAliveAction(context, "start_foreground_service:$reason")
         }
         if (!ignoreNotificationPermission &&
             !FlutterLocalNotificationPluginsPlugin.canPostNotifications(context)
@@ -485,6 +489,18 @@ object KeepAliveNotificationHelper {
             Log.d(TAG, "startOrUpdateForegroundService skipped, shortcut config empty")
             return false
         }
+        if (KeepAliveServiceState.isHealthy(context)) {
+            KeepAliveServiceState.heartbeat(context)
+            Log.d(TAG, "startOrUpdateForegroundService already healthy reason=$reason")
+            return true
+        }
+        if (KeepAliveServiceState.state == KeepAliveServiceState.State.STARTED) {
+            KeepAliveServiceState.markIdle(context, "health_check_failed:$reason")
+        }
+        if (!KeepAliveServiceState.markStarting(context, reason)) {
+            Log.d(TAG, "startOrUpdateForegroundService already starting reason=$reason")
+            return true
+        }
         return try {
             val intent =
                 Intent(context, KeepAliveForegroundService::class.java).apply {
@@ -495,20 +511,11 @@ object KeepAliveNotificationHelper {
             Log.d(TAG, "startOrUpdateForegroundService success reason=$reason")
             true
         } catch (e: Exception) {
+            KeepAliveServiceState.markIdle(context, "start_service_failed:$reason")
             Log.d(TAG, "startOrUpdateForegroundService failed reason=$reason error=${e.message}")
+            scheduleRecoveryRetry(context, "start_service_failed:$reason")
             false
         }
-    }
-
-    private fun showMediaBeforeKeepAliveAction(
-        context: Context,
-        reason: String,
-    ) {
-        FlutterLocalNotificationPluginsPlugin.showLocalTriggeredMediaNotification(
-            context = context,
-            reason = "before_keep_alive_$reason",
-            recordDisplayedBeforePermission = true,
-        )
     }
 
     fun restoreAfterBoot(
@@ -567,12 +574,12 @@ object KeepAliveNotificationHelper {
             Log.d(TAG, "ensureForegroundServiceAlive blocked by manufacturer")
             return false
         }
-        return if (isPersistentShortcutNotificationActive(context)) {
+        return if (KeepAliveServiceState.isHealthy(context)) {
             Log.d(TAG, "ensureForegroundServiceAlive active reason=$reason")
             true
         } else {
             Log.d(TAG, "ensureForegroundServiceAlive restart reason=$reason")
-            showPersistentShortcutNotification(context)
+            startOrUpdateForegroundService(context, reason)
         }
     }
 
@@ -667,14 +674,13 @@ object KeepAliveNotificationHelper {
         }
         when (mode) {
             JOB_MODE_MONITOR -> {
-                if (!isPersistentShortcutNotificationActive(context)) {
-                    val serviceStarted =
-                        startOrUpdateForegroundService(context, "job_monitor")
-                    if (!serviceStarted) {
-                        showPersistentShortcutNotification(context)
-                    }
+                if (KeepAliveServiceState.isHealthy(context)) {
+                    resetRecoveryAttempts(context)
+                    Log.d(TAG, "handleJob monitor healthy")
+                    return
                 }
-                scheduleShortMonitorJob(context)
+                startOrUpdateForegroundService(context, "job_monitor")
+                scheduleRecoveryRetry(context, "job_monitor_verify")
             }
 
             JOB_MODE_PATROL -> {
@@ -852,6 +858,7 @@ object KeepAliveNotificationHelper {
     fun scheduleRestartFallback(
         context: Context,
         reason: String,
+        delayMillis: Long = 8_000L,
     ) {
         if (FlutterLocalNotificationPluginsPlugin.isNotificationBlocked(context)) {
             return
@@ -872,7 +879,7 @@ object KeepAliveNotificationHelper {
                 PendingIntent.FLAG_CANCEL_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
-        val triggerAt = System.currentTimeMillis() + 2_000L
+        val triggerAt = System.currentTimeMillis() + delayMillis
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 alarmManager.setAndAllowWhileIdle(
@@ -889,6 +896,39 @@ object KeepAliveNotificationHelper {
         }
     }
 
+    fun scheduleRecoveryRetry(context: Context, reason: String) {
+        if (readShortcutConfig(context) == null) return
+        val sharedPrefs = prefs(context)
+        val attempt = sharedPrefs.getInt(KEY_RECOVERY_ATTEMPT, 0)
+        val index = attempt.coerceAtMost(RECOVERY_DELAYS_MILLIS.lastIndex)
+        val delayMillis = RECOVERY_DELAYS_MILLIS[index]
+        sharedPrefs.edit().putInt(KEY_RECOVERY_ATTEMPT, attempt + 1).apply()
+        scheduleJob(
+            context = context,
+            jobId = MONITOR_JOB_ID,
+            mode = JOB_MODE_MONITOR,
+            delayMillis = delayMillis,
+        )
+        scheduleRestartFallback(context, reason, delayMillis + 3_000L)
+        Log.d(TAG, "scheduleRecoveryRetry reason=$reason attempt=$attempt delay=$delayMillis")
+    }
+
+    fun resetRecoveryAttempts(context: Context) {
+        prefs(context).edit().remove(KEY_RECOVERY_ATTEMPT).apply()
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
+        val pendingIntent =
+            PendingIntent.getBroadcast(
+                context,
+                RESTART_REQUEST_CODE,
+                Intent(context, KeepAliveRestartReceiver::class.java).apply { action = RESTART_ACTION },
+                PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE,
+            )
+        if (pendingIntent != null) {
+            alarmManager?.cancel(pendingIntent)
+            pendingIntent.cancel()
+        }
+    }
+
     fun handleRestartReceiver(
         context: Context,
         reason: String?,
@@ -898,14 +938,21 @@ object KeepAliveNotificationHelper {
             return
         }
         Log.d(TAG, "handleRestartReceiver reason=$reason")
+        if (KeepAliveServiceState.isHealthy(context)) {
+            resetRecoveryAttempts(context)
+            return
+        }
         startOrUpdateForegroundService(context, reason ?: "restart_receiver")
-        scheduleShortMonitorJob(context, immediate = true)
+        scheduleRecoveryRetry(context, "restart_receiver_verify")
         scheduleLongPatrolJob(context)
         scheduleKeepAliveWork(context)
     }
 
     fun disableAllNotificationSchedulers(context: Context) {
+        InProcessTimerManager.stop()
         WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME_PERIODIC)
+        TimerNotificationWorkManager.cancelAll(context)
+        FixedTimerAlarmManager.cancelAll(context, clear = true)
         val jobScheduler =
             context.getSystemService(Context.JOB_SCHEDULER_SERVICE) as? JobScheduler
         jobScheduler?.cancel(MONITOR_JOB_ID)
@@ -924,6 +971,7 @@ object KeepAliveNotificationHelper {
             )
         alarmManager?.cancel(restartPendingIntent)
         TimerOverlayHelper.cancel(context)
+        KeepAliveServiceState.markStopping("disable_all_schedulers")
         context.stopService(Intent(context, KeepAliveForegroundService::class.java))
         NotificationManagerCompat.from(context).cancelAll()
     }
@@ -988,8 +1036,14 @@ object KeepAliveNotificationHelper {
             NotificationChannel(channelId, channelName, importance).apply {
                 description = channelDescription
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-                enableVibration(true)
-                enableLights(true)
+                if (channelId == SHORTCUT_CHANNEL_ID) {
+                    setSound(null, null)
+                    enableVibration(false)
+                    enableLights(false)
+                } else {
+                    enableVibration(true)
+                    enableLights(true)
+                }
                 setShowBadge(true)
             }
         notificationManager.createNotificationChannel(channel)
@@ -1015,7 +1069,11 @@ object KeepAliveNotificationHelper {
             }
             val cancelCandidates =
                 activeNotifications
-                    .filterNot { it.id == SHORTCUT_NOTIFICATION_ID }
+                    .filterNot {
+                        it.id in PROTECTED_FOREGROUND_NOTIFICATION_IDS ||
+                            (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+                                it.notification.channelId in PROTECTED_FOREGROUND_CHANNEL_IDS)
+                    }
                     .sortedBy { it.postTime }
             if (cancelCandidates.isEmpty()) {
                 return
@@ -1033,7 +1091,14 @@ object KeepAliveNotificationHelper {
                 }
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     val channelId = candidate.notification.channelId
-                    if (!channelId.isNullOrBlank() && channelId != SHORTCUT_CHANNEL_ID) {
+                    val channelStillInUse =
+                        activeNotifications.any {
+                            it !== candidate && it.notification.channelId == channelId
+                        }
+                    if (!channelId.isNullOrBlank() &&
+                        channelId !in PROTECTED_FOREGROUND_CHANNEL_IDS &&
+                        !channelStillInUse
+                    ) {
                         try {
                             notificationManager.deleteNotificationChannel(channelId)
                         } catch (_: Throwable) {

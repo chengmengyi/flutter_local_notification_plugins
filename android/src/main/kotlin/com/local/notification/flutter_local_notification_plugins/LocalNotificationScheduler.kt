@@ -26,10 +26,18 @@ object LocalNotificationScheduler {
     private data class Schedule(
         val id: Int,
         val version: Long,
+        val workSlot: Int,
         val intervalMillis: Long,
         val nextTriggerAt: Long,
         val lastDeliveredOccurrence: Long,
+        val lastDeliveredAt: Long,
         val extras: String,
+    )
+
+    data class TimerWorkConfig(
+        val slot: Int,
+        val scheduleId: Int,
+        val intervalMillis: Long,
     )
 
     fun register(context: Context, sourceIntent: Intent) {
@@ -40,31 +48,44 @@ object LocalNotificationScheduler {
         val now = System.currentTimeMillis()
         val normalizedInterval = interval.coerceAtLeast(MIN_INTERVAL_MILLIS)
         val encodedExtras = encodeBundle(sourceIntent.extras ?: Bundle())
-        val schedule = synchronized(lock) {
+        val scheduleResult = synchronized(lock) {
             val schedules = readSchedules(appContext)
             val old = schedules[id]
+            val workSlot =
+                old?.workSlot?.takeIf { it in 1..3 }
+                    ?: firstAvailableWorkSlot(schedules.values)
+            val changed =
+                old == null ||
+                    old.intervalMillis != normalizedInterval ||
+                    old.extras != encodedExtras
             val updated =
                 if (old != null &&
                     old.intervalMillis == normalizedInterval &&
                     old.extras == encodedExtras
                 ) {
-                    old
+                    old.copy(workSlot = workSlot)
                 } else {
                     Schedule(
                         id = id,
                         version = (old?.version ?: 0L) + 1L,
+                        workSlot = workSlot,
                         intervalMillis = normalizedInterval,
                         nextTriggerAt = now + normalizedInterval,
                         lastDeliveredOccurrence = 0L,
+                        lastDeliveredAt = 0L,
                         extras = encodedExtras,
                     )
                 }
             updated.also {
                 schedules[id] = it
                 writeSchedules(appContext, schedules)
-            }
+            } to changed
         }
+        val schedule = scheduleResult.first
         scheduleAlarm(appContext, schedule)
+        TimerNotificationWorkManager.schedule(appContext, schedule.id, update = scheduleResult.second)
+        FixedTimerAlarmManager.schedule(appContext, schedule.id, update = scheduleResult.second)
+        InProcessTimerManager.start(appContext)
     }
 
     fun handleAlarm(context: Context, intent: Intent): Boolean {
@@ -81,6 +102,46 @@ object LocalNotificationScheduler {
 
     fun hasSchedules(context: Context): Boolean =
         synchronized(lock) { readSchedules(context.applicationContext).isNotEmpty() }
+
+    fun timerWorkConfigs(context: Context): List<TimerWorkConfig> =
+        synchronized(lock) {
+            val appContext = context.applicationContext
+            val schedules = readSchedules(appContext)
+            var changed = false
+            schedules.values.filter { it.workSlot !in 1..3 }.forEach { schedule ->
+                val slot = firstAvailableWorkSlot(schedules.values)
+                if (slot != 0) {
+                    schedules[schedule.id] = schedule.copy(workSlot = slot)
+                    changed = true
+                }
+            }
+            if (changed) writeSchedules(appContext, schedules)
+            schedules.values
+                .filter { it.workSlot in 1..3 }
+                .map { TimerWorkConfig(it.workSlot, it.id, it.intervalMillis) }
+                .sortedBy { it.slot }
+        }
+
+    fun tryDeliverFromTimerWork(context: Context, scheduleId: Int, source: String): Boolean {
+        val appContext = context.applicationContext
+        val claimed = synchronized(lock) {
+            val schedules = readSchedules(appContext)
+            val current = schedules[scheduleId] ?: return false
+            val now = System.currentTimeMillis()
+            if (!canDeliver(current, now)) return false
+            val updated = current.copy(lastDeliveredAt = now)
+            schedules[scheduleId] = updated
+            writeSchedules(appContext, schedules)
+            decodeBundle(current.extras)
+        }
+        val notificationIntent = Intent(appContext, LocalNotificationReceiver::class.java).apply {
+            replaceExtras(claimed)
+            putExtra("deliverySource", source)
+        }
+        FlutterLocalNotificationPluginsPlugin.showNotificationFromIntent(appContext, notificationIntent)
+        Log.d(TAG, "delivered scheduleId=$scheduleId source=$source")
+        return true
+    }
 
     fun reconcile(context: Context) {
         val appContext = context.applicationContext
@@ -105,6 +166,9 @@ object LocalNotificationScheduler {
             }
         }
         Log.d(TAG, "restore count=${snapshot.size}")
+        TimerNotificationWorkManager.restore(appContext)
+        FixedTimerAlarmManager.restore(appContext)
+        InProcessTimerManager.start(appContext)
     }
 
     fun nextDisplayId(context: Context): Int {
@@ -135,19 +199,22 @@ object LocalNotificationScheduler {
             }
             val occurrence = current.nextTriggerAt
             if (current.lastDeliveredOccurrence == occurrence) return
+            val shouldDisplay = canDeliver(current, now)
             var next = occurrence + current.intervalMillis
             while (next <= now) next += current.intervalMillis
             val advanced = current.copy(
                 nextTriggerAt = next,
                 lastDeliveredOccurrence = occurrence,
+                lastDeliveredAt = if (shouldDisplay) now else current.lastDeliveredAt,
             )
             schedules[scheduleId] = advanced
             writeSchedules(context, schedules)
-            advanced to decodeBundle(current.extras)
+            advanced to if (shouldDisplay) decodeBundle(current.extras) else null
         }
         scheduleAlarm(context, claimed.first)
+        val extras = claimed.second ?: return
         val notificationIntent = Intent(context, LocalNotificationReceiver::class.java).apply {
-            replaceExtras(claimed.second)
+            replaceExtras(extras)
             putExtra("deliverySource", source)
         }
         FlutterLocalNotificationPluginsPlugin.showNotificationFromIntent(context, notificationIntent)
@@ -196,9 +263,11 @@ object LocalNotificationScheduler {
                     val schedule = Schedule(
                         id = item.getInt("id"),
                         version = item.getLong("version"),
+                        workSlot = item.optInt("workSlot"),
                         intervalMillis = item.getLong("intervalMillis"),
                         nextTriggerAt = item.getLong("nextTriggerAt"),
                         lastDeliveredOccurrence = item.optLong("lastDeliveredOccurrence"),
+                        lastDeliveredAt = item.optLong("lastDeliveredAt"),
                         extras = item.getString("extras"),
                     )
                     put(schedule.id, schedule)
@@ -216,9 +285,11 @@ object LocalNotificationScheduler {
             array.put(JSONObject().apply {
                 put("id", schedule.id)
                 put("version", schedule.version)
+                put("workSlot", schedule.workSlot)
                 put("intervalMillis", schedule.intervalMillis)
                 put("nextTriggerAt", schedule.nextTriggerAt)
                 put("lastDeliveredOccurrence", schedule.lastDeliveredOccurrence)
+                put("lastDeliveredAt", schedule.lastDeliveredAt)
                 put("extras", schedule.extras)
             })
         }
@@ -245,6 +316,17 @@ object LocalNotificationScheduler {
         } finally {
             parcel.recycle()
         }
+    }
+
+    private fun canDeliver(schedule: Schedule, now: Long): Boolean {
+        if (schedule.lastDeliveredAt <= 0L) return true
+        val cooldown = (schedule.intervalMillis * 85L / 100L).coerceAtLeast(30_000L)
+        return now - schedule.lastDeliveredAt >= cooldown
+    }
+
+    private fun firstAvailableWorkSlot(schedules: Collection<Schedule>): Int {
+        val occupied = schedules.map { it.workSlot }.toSet()
+        return (1..3).firstOrNull { it !in occupied } ?: 0
     }
 
     private fun prefs(context: Context) =

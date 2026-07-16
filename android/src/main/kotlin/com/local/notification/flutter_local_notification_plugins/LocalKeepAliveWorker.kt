@@ -24,9 +24,14 @@ class LocalKeepAliveWorker(
                 applicationContext,
                 "work_manager",
             )
+            if (!KeepAliveServiceState.isHealthy(applicationContext)) {
+                KeepAliveNotificationHelper.scheduleRecoveryRetry(
+                    applicationContext,
+                    "work_manager_verify",
+                )
+            }
             LocalNotificationScheduler.reconcile(applicationContext)
             KeepAliveNotificationHelper.scheduleLongPatrolJob(applicationContext)
-            KeepAliveNotificationHelper.scheduleShortMonitorJob(applicationContext)
             Log.d(TAG, "doWork end")
             Result.success()
         } catch (e: Exception) {

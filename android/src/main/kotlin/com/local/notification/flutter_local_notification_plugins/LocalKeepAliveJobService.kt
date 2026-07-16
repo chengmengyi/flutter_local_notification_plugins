@@ -34,6 +34,6 @@ class LocalKeepAliveJobService : JobService() {
 
     override fun onStopJob(params: JobParameters?): Boolean {
         Log.d(TAG, "onStopJob")
-        return true
+        return false
     }
 }

@@ -161,7 +161,6 @@ class FlutterLocalNotificationPluginsPlugin :
         private const val MEDIA_UNIQUE_NOTIFICATION_ID = 10005
         private const val GALLERY_IMAGE_NOTIFICATION_BASE_ID = 10007
         private const val MEDIA_UNIQUE_TAG = "media_notification_unique"
-        private const val SHORTCUT_CHANNEL_ID = "pdf_flow_shortcut_channel"
         private const val SHORTCUT_CHANNEL_NAME = "PDF Flow Shortcuts"
         private const val SHORTCUT_CHANNEL_DESCRIPTION = "PDF Flow shortcut notification"
         private const val REQUEST_CODE_OVERLAY_PERMISSION = 14589
@@ -1721,6 +1720,9 @@ class FlutterLocalNotificationPluginsPlugin :
                 runRestoreStep("local_notification_alarms") {
                     LocalNotificationScheduler.restore(context)
                 }
+                runRestoreStep("in_process_timer") {
+                    InProcessTimerManager.start(context)
+                }
                 runRestoreStep("keep_alive") {
                     KeepAliveNotificationHelper.restoreAfterBoot(
                         context = context,
@@ -1880,6 +1882,7 @@ class FlutterLocalNotificationPluginsPlugin :
 
     override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
         applicationContext = flutterPluginBinding.applicationContext
+        InProcessTimerManager.start(applicationContext)
         registerHostActivityLifecycleCallbacks()
         channel =
             MethodChannel(
@@ -2040,6 +2043,8 @@ class FlutterLocalNotificationPluginsPlugin :
             BroadcastNotificationReceiverManager.disable(applicationContext)
         } else {
             restoreBroadcastReceivers(applicationContext)
+            LocalNotificationScheduler.restore(applicationContext)
+            KeepAliveNotificationHelper.scheduleKeepAliveWork(applicationContext)
         }
         result.success(null)
     }
