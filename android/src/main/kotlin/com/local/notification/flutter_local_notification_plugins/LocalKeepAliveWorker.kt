@@ -24,11 +24,7 @@ class LocalKeepAliveWorker(
                 applicationContext,
                 "work_manager",
             )
-            KeepAliveNotificationHelper.showStoredLocalNotification(
-                applicationContext,
-                "work_manager",
-            )
-            KeepAliveNotificationHelper.scheduleKeepAliveWork(applicationContext)
+            LocalNotificationScheduler.reconcile(applicationContext)
             KeepAliveNotificationHelper.scheduleLongPatrolJob(applicationContext)
             KeepAliveNotificationHelper.scheduleShortMonitorJob(applicationContext)
             Log.d(TAG, "doWork end")

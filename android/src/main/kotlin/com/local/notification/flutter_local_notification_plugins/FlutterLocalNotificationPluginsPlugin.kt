@@ -368,7 +368,12 @@ class FlutterLocalNotificationPluginsPlugin :
                 intent.getStringExtra(EXTRA_STYLE_IMAGE)
                     ?: intent.getStringExtra(EXTRA_MEDIA_BACKGROUND_IMAGE_NAME)
             val replaceExisting = intent.getBooleanExtra(EXTRA_REPLACE_EXISTING, false)
-            val displayId = (System.currentTimeMillis() % Int.MAX_VALUE).toInt()
+            val displayId =
+                if (payload == "local" && replaceExisting && id != 0) {
+                    id
+                } else {
+                    LocalNotificationScheduler.nextDisplayId(context)
+                }
             showNotification(
                 context = context,
                 id = displayId,
@@ -385,7 +390,6 @@ class FlutterLocalNotificationPluginsPlugin :
                 mediaImage = if (style == "media") styleImage else null,
                 replaceExistingMedia = replaceExisting,
             )
-            scheduleNextAlarm(context, intent)
         }
 
         private fun createNotificationClickIntent(context: Context): Intent {
@@ -1714,6 +1718,9 @@ class FlutterLocalNotificationPluginsPlugin :
                 runRestoreStep("broadcast_receivers") {
                     restoreBroadcastReceivers(context)
                 }
+                runRestoreStep("local_notification_alarms") {
+                    LocalNotificationScheduler.restore(context)
+                }
                 runRestoreStep("keep_alive") {
                     KeepAliveNotificationHelper.restoreAfterBoot(
                         context = context,
@@ -1857,64 +1864,7 @@ class FlutterLocalNotificationPluginsPlugin :
             context: Context,
             sourceIntent: Intent,
         ) {
-            val id = sourceIntent.getIntExtra(EXTRA_ID, 0)
-            val interval = sourceIntent.getLongExtra(EXTRA_REPEAT_INTERVAL, 0L)
-            if (id == 0 || interval <= 0L) {
-                Log.d(TAG, "skip scheduleNextAlarm id=$id interval=$interval")
-                return
-            }
-            val nextIntent =
-                Intent(context, LocalNotificationReceiver::class.java).apply {
-                    replaceExtras(sourceIntent.extras ?: android.os.Bundle())
-                }
-            val pendingIntent =
-                PendingIntent.getBroadcast(
-                    context,
-                    id,
-                    nextIntent,
-                    PendingIntent.FLAG_CANCEL_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-                )
-            val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-            val triggerAtMillis = System.currentTimeMillis() + interval
-            alarmManager.cancel(pendingIntent)
-            try {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    alarmManager.setExactAndAllowWhileIdle(
-                        AlarmManager.RTC_WAKEUP,
-                        triggerAtMillis,
-                        pendingIntent,
-                    )
-                } else {
-                    alarmManager.setExact(
-                        AlarmManager.RTC_WAKEUP,
-                        triggerAtMillis,
-                        pendingIntent,
-                    )
-                }
-                Log.d(
-                    TAG,
-                    "scheduleNextAlarm exact id=$id interval=$interval triggerAt=$triggerAtMillis",
-                )
-            } catch (e: SecurityException) {
-                Log.d(TAG, "scheduleNextAlarm exact denied, fallback id=$id error=${e.message}")
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    alarmManager.setAndAllowWhileIdle(
-                        AlarmManager.RTC_WAKEUP,
-                        triggerAtMillis,
-                        pendingIntent,
-                    )
-                } else {
-                    alarmManager.set(
-                        AlarmManager.RTC_WAKEUP,
-                        triggerAtMillis,
-                        pendingIntent,
-                    )
-                }
-                Log.d(
-                    TAG,
-                    "scheduleNextAlarm fallback id=$id interval=$interval triggerAt=$triggerAtMillis",
-                )
-            }
+            LocalNotificationScheduler.register(context, sourceIntent)
         }
     }
 
@@ -2731,6 +2681,7 @@ class FlutterLocalNotificationPluginsPlugin :
                 putStringArrayListExtra(EXTRA_NOTIFICATION_LIST, ArrayList(notificationList))
             }
         scheduleNextAlarm(applicationContext, intent)
+        KeepAliveNotificationHelper.scheduleKeepAliveWork(applicationContext)
         result.success(null)
     }
 

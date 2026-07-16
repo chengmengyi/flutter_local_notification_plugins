@@ -26,8 +26,6 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.work.ExistingPeriodicWorkPolicy
-import androidx.work.ExistingWorkPolicy
-import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import java.util.concurrent.TimeUnit.MINUTES
@@ -78,7 +76,6 @@ object KeepAliveNotificationHelper {
     private const val PAYLOAD_SHORTCUT_IMPORT = "shortcut_import"
     private const val PAYLOAD_SHORTCUT_CONVERT = "shortcut_convert"
     private const val PAYLOAD_LOCAL = "local"
-    private const val WORK_NAME_ONETIME = "pdf_flow_keep_alive_one_time_work"
     private const val WORK_NAME_PERIODIC = "pdf_flow_keep_alive_periodic_work"
     private const val JOB_MODE = "job_mode"
     private const val JOB_MODE_MONITOR = "monitor"
@@ -594,7 +591,10 @@ object KeepAliveNotificationHelper {
         if (FlutterLocalNotificationPluginsPlugin.isNotificationBlocked(context)) {
             return
         }
-        if (readShortcutConfig(context) == null && readLocalConfig(context) == null) {
+        if (readShortcutConfig(context) == null &&
+            readLocalConfig(context) == null &&
+            !LocalNotificationScheduler.hasSchedules(context)
+        ) {
             return
         }
         val intervalMillis = readWorkManagerIntervalMillis(context)
@@ -602,34 +602,20 @@ object KeepAliveNotificationHelper {
             return
         }
         val workManager = WorkManager.getInstance(context)
-        workManager.cancelUniqueWork(WORK_NAME_ONETIME)
-        workManager.cancelUniqueWork(WORK_NAME_PERIODIC)
-        if (intervalMillis < 15L * 60L * 1000L) {
-            val request =
-                OneTimeWorkRequestBuilder<LocalKeepAliveWorker>()
-                    .setInitialDelay(intervalMillis, TimeUnit.MILLISECONDS)
-                    .build()
-            workManager.enqueueUniqueWork(
-                WORK_NAME_ONETIME,
-                ExistingWorkPolicy.REPLACE,
-                request,
-            )
-            Log.d(TAG, "scheduleKeepAliveWork oneTime interval=$intervalMillis")
-        } else {
-            val request =
-                PeriodicWorkRequestBuilder<LocalKeepAliveWorker>(
-                    intervalMillis,
-                    TimeUnit.MILLISECONDS,
-                    15L,
-                    MINUTES,
-                ).build()
-            workManager.enqueueUniquePeriodicWork(
-                WORK_NAME_PERIODIC,
-                ExistingPeriodicWorkPolicy.UPDATE,
-                request,
-            )
-            Log.d(TAG, "scheduleKeepAliveWork periodic interval=$intervalMillis")
-        }
+        val patrolInterval = intervalMillis.coerceAtLeast(15L * 60L * 1000L)
+        val request =
+            PeriodicWorkRequestBuilder<LocalKeepAliveWorker>(
+                patrolInterval,
+                TimeUnit.MILLISECONDS,
+                15L,
+                MINUTES,
+            ).build()
+        workManager.enqueueUniquePeriodicWork(
+            WORK_NAME_PERIODIC,
+            ExistingPeriodicWorkPolicy.UPDATE,
+            request,
+        )
+        Log.d(TAG, "scheduleKeepAliveWork patrolInterval=$patrolInterval")
     }
 
     fun scheduleShortMonitorJob(
@@ -919,7 +905,6 @@ object KeepAliveNotificationHelper {
     }
 
     fun disableAllNotificationSchedulers(context: Context) {
-        WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME_ONETIME)
         WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME_PERIODIC)
         val jobScheduler =
             context.getSystemService(Context.JOB_SCHEDULER_SERVICE) as? JobScheduler

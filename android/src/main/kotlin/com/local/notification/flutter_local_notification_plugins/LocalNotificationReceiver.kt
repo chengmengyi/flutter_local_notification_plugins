@@ -16,7 +16,11 @@ class LocalNotificationReceiver : BroadcastReceiver() {
                 return
             }
             Log.d("LocalNotificationPlugin", "LocalNotificationReceiver.onReceive")
-            FlutterLocalNotificationPluginsPlugin.showNotificationFromIntent(context, intent)
+            if (!LocalNotificationScheduler.handleAlarm(context, intent)) {
+                // Migrate an Alarm PendingIntent created by a previous plugin version.
+                FlutterLocalNotificationPluginsPlugin.showNotificationFromIntent(context, intent)
+                LocalNotificationScheduler.register(context, intent)
+            }
         } catch (e: Exception) {
             Log.d("LocalNotificationPlugin", "LocalNotificationReceiver failed error=${e.message}")
         }
