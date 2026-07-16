@@ -2656,6 +2656,11 @@ class FlutterLocalNotificationPluginsPlugin :
                 notificationList = notificationList,
             )
             saveMediaReflectionConfig(applicationContext, reflectionConfig)
+            showLocalTriggeredMediaNotification(
+                context = applicationContext,
+                reason = "periodic_media_initialized",
+                recordDisplayedBeforePermission = true,
+            )
         }
         val intent =
             Intent(applicationContext, LocalNotificationReceiver::class.java).apply {
