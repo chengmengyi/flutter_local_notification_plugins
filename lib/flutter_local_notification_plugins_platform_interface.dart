@@ -48,6 +48,21 @@ abstract class FlutterLocalNotificationPluginsPlatform
     );
   }
 
+  Future<void> configureNativePushReporting({
+    required bool enabled,
+    required String url,
+    required Map<String, String> headers,
+    required Map<String, Object?> payloadTemplate,
+    required String distinctIdKey,
+    required String eventIdKey,
+    required String timestampKey,
+    required String notificationSourceKey,
+  }) {
+    throw UnimplementedError(
+      'configureNativePushReporting() has not been implemented.',
+    );
+  }
+
   /// 检查悬浮层权限是否已开启。
   Future<bool> checkOverlayPermission() {
     throw UnimplementedError(

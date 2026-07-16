@@ -796,7 +796,7 @@ object KeepAliveNotificationHelper {
                 notification = builder.build(),
                 payload = payload,
             )
-            FlutterLocalNotificationPluginsPlugin.dispatchNotificationDisplayed(
+            NativePushReporter.reportDisplayed(
                 context,
                 mapOf(
                     "id" to displayId,

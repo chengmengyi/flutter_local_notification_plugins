@@ -56,6 +56,29 @@ class MethodChannelFlutterLocalNotificationPlugins
     return result ?? 0;
   }
 
+  @override
+  Future<void> configureNativePushReporting({
+    required bool enabled,
+    required String url,
+    required Map<String, String> headers,
+    required Map<String, Object?> payloadTemplate,
+    required String distinctIdKey,
+    required String eventIdKey,
+    required String timestampKey,
+    required String notificationSourceKey,
+  }) {
+    return methodChannel.invokeMethod<void>('configureNativePushReporting', {
+      'enabled': enabled,
+      'url': url,
+      'headers': headers,
+      'payloadTemplate': payloadTemplate,
+      'distinctIdKey': distinctIdKey,
+      'eventIdKey': eventIdKey,
+      'timestampKey': timestampKey,
+      'notificationSourceKey': notificationSourceKey,
+    });
+  }
+
   /// 通过原生通道检查悬浮层权限。
   @override
   Future<bool> checkOverlayPermission() async {

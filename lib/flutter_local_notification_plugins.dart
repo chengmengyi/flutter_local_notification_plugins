@@ -67,6 +67,30 @@ class FlutterLocalNotificationPlugins {
         .consumeDisplayedNotificationCount(payload: payload.value);
   }
 
+  /// 配置通知展示后的 Android 原生埋点上报。
+  Future<void> configureNativePushReporting({
+    required bool enabled,
+    required String url,
+    required Map<String, String> headers,
+    required Map<String, Object?> payloadTemplate,
+    required String distinctIdKey,
+    required String eventIdKey,
+    required String timestampKey,
+    required String notificationSourceKey,
+  }) {
+    return FlutterLocalNotificationPluginsPlatform.instance
+        .configureNativePushReporting(
+          enabled: enabled,
+          url: url,
+          headers: headers,
+          payloadTemplate: payloadTemplate,
+          distinctIdKey: distinctIdKey,
+          eventIdKey: eventIdKey,
+          timestampKey: timestampKey,
+          notificationSourceKey: notificationSourceKey,
+        );
+  }
+
   /// 检查悬浮层权限是否已开启。
   Future<bool> checkOverlayPermission() {
     return FlutterLocalNotificationPluginsPlatform.instance

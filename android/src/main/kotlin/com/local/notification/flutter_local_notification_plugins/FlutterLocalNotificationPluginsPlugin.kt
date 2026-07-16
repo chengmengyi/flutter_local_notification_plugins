@@ -729,7 +729,7 @@ class FlutterLocalNotificationPluginsPlugin :
                     }
                 }
                 if (dispatchDisplayedAfterNotify) {
-                    dispatchNotificationDisplayed(
+                    NativePushReporter.reportDisplayed(
                         context,
                         mapOf(
                             "id" to baseId,
@@ -1905,6 +1905,7 @@ class FlutterLocalNotificationPluginsPlugin :
                 "isKoreanLocale",
                 "getPlatformVersion",
                 "consumeDisplayedNotificationCount",
+                "configureNativePushReporting",
                 "getNotificationAppLaunchDetails",
                 "consumeTimerOverlayClickEvent",
                 "updateShowMediaTag",
@@ -1965,6 +1966,14 @@ class FlutterLocalNotificationPluginsPlugin :
                         call.argument("payload"),
                     ),
                 )
+            "configureNativePushReporting" -> {
+                try {
+                    NativePushReporter.configure(applicationContext, call.arguments as? Map<*, *> ?: emptyMap<Any, Any>())
+                    result.success(null)
+                } catch (error: Exception) {
+                    result.error("invalid_native_push_reporting_config", error.message, null)
+                }
+            }
             "configureBlockedManufacturers" -> configureBlockedManufacturers(call, result)
             "isSamsungDevice" -> result.success(isSamsungDevice(applicationContext))
             "isKoreanLocale" -> result.success(isKoreanLocale(applicationContext))
