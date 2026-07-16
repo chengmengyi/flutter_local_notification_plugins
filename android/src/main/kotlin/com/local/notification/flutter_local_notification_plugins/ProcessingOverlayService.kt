@@ -505,7 +505,12 @@ class ProcessingOverlayService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        ensureForegroundNotification()
+        try {
+            ensureForegroundNotification()
+        } catch (e: Exception) {
+            Log.e(TAG, "onCreate failed", e)
+            stopSelf()
+        }
     }
 
     override fun onStartCommand(
@@ -513,42 +518,53 @@ class ProcessingOverlayService : Service() {
         flags: Int,
         startId: Int,
     ): Int {
-        val action = intent?.action ?: ACTION_SHOW
-        if (action == ACTION_CLOSE) {
+        try {
+            val action = intent?.action ?: ACTION_SHOW
+            if (action == ACTION_CLOSE) {
+                stopSelf()
+                return START_NOT_STICKY
+            }
+            if (!isPermissionGranted(applicationContext)) {
+                Log.d(TAG, "onStartCommand stop, overlay permission missing")
+                stopSelf()
+                return START_NOT_STICKY
+            }
+            val state = extractState(intent) ?: readStoredState()
+            if (state == null || state.taskId.isBlank()) {
+                Log.d(TAG, "onStartCommand stop, empty state")
+                stopSelf()
+                return START_NOT_STICKY
+            }
+            saveState(state)
+            currentTaskId = state.taskId
+            ensureOverlayView()
+            updateOverlayView(state)
+            ensureForegroundNotification()
+            isRunning = true
+            return START_STICKY
+        } catch (e: Exception) {
+            Log.e(TAG, "onStartCommand failed action=${intent?.action}", e)
             stopSelf()
             return START_NOT_STICKY
         }
-        if (!isPermissionGranted(applicationContext)) {
-            Log.d(TAG, "onStartCommand stop, overlay permission missing")
-            stopSelf()
-            return START_NOT_STICKY
-        }
-        val state = extractState(intent) ?: readStoredState()
-        if (state == null || state.taskId.isBlank()) {
-            Log.d(TAG, "onStartCommand stop, empty state")
-            stopSelf()
-            return START_NOT_STICKY
-        }
-        saveState(state)
-        currentTaskId = state.taskId
-        ensureOverlayView()
-        updateOverlayView(state)
-        ensureForegroundNotification()
-        isRunning = true
-        return START_STICKY
     }
 
     override fun onDestroy() {
-        removeOverlayView()
-        clearStoredState()
-        isRunning = false
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            stopForeground(STOP_FOREGROUND_REMOVE)
-        } else {
-            @Suppress("DEPRECATION")
-            stopForeground(true)
+        try {
+            removeOverlayView()
+            clearStoredState()
+            isRunning = false
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                stopForeground(STOP_FOREGROUND_REMOVE)
+            } else {
+                @Suppress("DEPRECATION")
+                stopForeground(true)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "onDestroy failed", e)
+        } finally {
+            super.onDestroy()
         }
-        super.onDestroy()
     }
 
     private fun ensureOverlayView() {
@@ -630,12 +646,16 @@ class ProcessingOverlayService : Service() {
                 .into(targetView)
         } catch (e: Exception) {
             Log.d(TAG, "bindAppLogo failed error=${e.message}")
-            Glide
-                .with(applicationContext)
-                .asBitmap()
-                .load(resolveSmallIcon())
-                .circleCrop()
-                .into(targetView)
+            try {
+                Glide
+                    .with(applicationContext)
+                    .asBitmap()
+                    .load(resolveSmallIcon())
+                    .circleCrop()
+                    .into(targetView)
+            } catch (fallbackError: Exception) {
+                Log.e(TAG, "bindAppLogo fallback failed", fallbackError)
+            }
         }
     }
 
@@ -653,10 +673,15 @@ class ProcessingOverlayService : Service() {
         var dragging = false
         rootView.isClickable = true
         rootView.setOnClickListener {
-            handleOverlayClick()
+            try {
+                handleOverlayClick()
+            } catch (e: Exception) {
+                Log.e(TAG, "overlay click failed", e)
+            }
         }
         rootView.setOnTouchListener { view, event ->
-            when (event.actionMasked) {
+            try {
+                when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     cancelOverlaySettleAnimation()
                     downRawX = event.rawX
@@ -699,7 +724,11 @@ class ProcessingOverlayService : Service() {
                     }
                     true
                 }
-                else -> false
+                    else -> false
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "overlay touch failed action=${event.actionMasked}", e)
+                false
             }
         }
     }
@@ -717,7 +746,11 @@ class ProcessingOverlayService : Service() {
         val callback =
             Choreographer.FrameCallback {
                 dragFrameCallback = null
-                updateOverlayLayout(view, params)
+                try {
+                    updateOverlayLayout(view, params)
+                } catch (e: Exception) {
+                    Log.e(TAG, "overlay frame update failed", e)
+                }
             }
         dragFrameCallback = callback
         Choreographer.getInstance().postFrameCallback(callback)
@@ -748,8 +781,13 @@ class ProcessingOverlayService : Service() {
                 duration = 220L
                 interpolator = android.view.animation.DecelerateInterpolator(1.8f)
                 addUpdateListener { animator ->
-                    setLayoutParamXY(this@ProcessingOverlayService, params, animator.animatedValue as Int, startY)
-                    updateOverlayLayout(view, params)
+                    try {
+                        setLayoutParamXY(this@ProcessingOverlayService, params, animator.animatedValue as Int, startY)
+                        updateOverlayLayout(view, params)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "overlay animation update failed", e)
+                        cancel()
+                    }
                 }
                 start()
             }

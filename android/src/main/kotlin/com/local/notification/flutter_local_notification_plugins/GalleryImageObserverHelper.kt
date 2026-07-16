@@ -103,7 +103,11 @@ object GalleryImageObserverHelper {
         queryRunnable =
             Runnable {
                 queryRunnable = null
-                checkLatestImage(appContext, notifyForNewer = true, reason = reason)
+                try {
+                    checkLatestImage(appContext, notifyForNewer = true, reason = reason)
+                } catch (e: Exception) {
+                    Log.e(TAG, "delayed check failed reason=$reason", e)
+                }
             }
         handler.postDelayed(queryRunnable ?: return, QUERY_DELAY_MILLIS)
     }

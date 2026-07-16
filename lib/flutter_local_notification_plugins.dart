@@ -74,9 +74,10 @@ class FlutterLocalNotificationPlugins {
     required Map<String, String> headers,
     required Map<String, Object?> payloadTemplate,
     required String distinctIdKey,
-    required String eventIdKey,
-    required String timestampKey,
+    required String logIdKey,
+    required String clientTsKey,
     required String notificationSourceKey,
+    required String packageKey,
   }) {
     return FlutterLocalNotificationPluginsPlatform.instance
         .configureNativePushReporting(
@@ -85,9 +86,10 @@ class FlutterLocalNotificationPlugins {
           headers: headers,
           payloadTemplate: payloadTemplate,
           distinctIdKey: distinctIdKey,
-          eventIdKey: eventIdKey,
-          timestampKey: timestampKey,
+          logIdKey: logIdKey,
+          clientTsKey: clientTsKey,
           notificationSourceKey: notificationSourceKey,
+          packageKey: packageKey,
         );
   }
 

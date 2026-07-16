@@ -101,7 +101,12 @@ class TimerOverlayService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        ensureForegroundNotification()
+        try {
+            ensureForegroundNotification()
+        } catch (e: Exception) {
+            Log.e(TAG, "onCreate failed", e)
+            stopSelf()
+        }
     }
 
     override fun onStartCommand(
@@ -109,41 +114,51 @@ class TimerOverlayService : Service() {
         flags: Int,
         startId: Int,
     ): Int {
-        if (intent?.action == ACTION_CLOSE) {
+        try {
+            if (intent?.action == ACTION_CLOSE) {
+                stopSelf()
+                return START_NOT_STICKY
+            }
+            if (!TimerOverlayHelper.canDrawOverlaysByReflection(applicationContext)) {
+                stopSelf()
+                return START_NOT_STICKY
+            }
+            val layoutName = intent?.getStringExtra(EXTRA_LAYOUT_NAME).orEmpty()
+            if (layoutName.isBlank()) {
+                stopSelf()
+                return START_NOT_STICKY
+            }
+            showOverlay(
+                layoutName = layoutName,
+                title = intent?.getStringExtra(EXTRA_TITLE).orEmpty(),
+                desc = intent?.getStringExtra(EXTRA_DESC).orEmpty(),
+                button = intent?.getStringExtra(EXTRA_BUTTON).orEmpty(),
+                button2 = intent?.getStringExtra(EXTRA_BUTTON_2),
+                useLastPdfInfo = intent?.getBooleanExtra(EXTRA_USE_LAST_PDF_INFO, true) != false,
+                continueReadingStr = intent?.getStringExtra(EXTRA_CONTINUE_READING_STR),
+            )
+            ensureForegroundNotification()
+        } catch (e: Exception) {
+            Log.e(TAG, "onStartCommand failed action=${intent?.action}", e)
             stopSelf()
-            return START_NOT_STICKY
         }
-        if (!TimerOverlayHelper.canDrawOverlaysByReflection(applicationContext)) {
-            stopSelf()
-            return START_NOT_STICKY
-        }
-        val layoutName = intent?.getStringExtra(EXTRA_LAYOUT_NAME).orEmpty()
-        if (layoutName.isBlank()) {
-            stopSelf()
-            return START_NOT_STICKY
-        }
-        showOverlay(
-            layoutName = layoutName,
-            title = intent?.getStringExtra(EXTRA_TITLE).orEmpty(),
-            desc = intent?.getStringExtra(EXTRA_DESC).orEmpty(),
-            button = intent?.getStringExtra(EXTRA_BUTTON).orEmpty(),
-            button2 = intent?.getStringExtra(EXTRA_BUTTON_2),
-            useLastPdfInfo = intent?.getBooleanExtra(EXTRA_USE_LAST_PDF_INFO, true) != false,
-            continueReadingStr = intent?.getStringExtra(EXTRA_CONTINUE_READING_STR),
-        )
-        ensureForegroundNotification()
         return START_NOT_STICKY
     }
 
     override fun onDestroy() {
-        removeOverlay()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            stopForeground(STOP_FOREGROUND_REMOVE)
-        } else {
-            @Suppress("DEPRECATION")
-            stopForeground(true)
+        try {
+            removeOverlay()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                stopForeground(STOP_FOREGROUND_REMOVE)
+            } else {
+                @Suppress("DEPRECATION")
+                stopForeground(true)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "onDestroy failed", e)
+        } finally {
+            super.onDestroy()
         }
-        super.onDestroy()
     }
 
     private fun showOverlay(
@@ -166,16 +181,20 @@ class TimerOverlayService : Service() {
             LayoutInflater.from(this).inflate(layoutResId, null, false).apply {
                 isClickable = true
                 setOnClickListener {
-                    FlutterLocalNotificationPluginsPlugin.clearLaunchDetails(applicationContext)
-                    TimerOverlayHelper.cacheAndDispatchClickEvent(
-                        context = applicationContext,
-                        layoutName = layoutName,
-                        content = pendingDisplayContent,
-                    )
-                    FlutterLocalNotificationPluginsPlugin.bringHostAppToForegroundOrStart(
-                        applicationContext,
-                    )
-                    stopSelf()
+                    try {
+                        FlutterLocalNotificationPluginsPlugin.clearLaunchDetails(applicationContext)
+                        TimerOverlayHelper.cacheAndDispatchClickEvent(
+                            context = applicationContext,
+                            layoutName = layoutName,
+                            content = pendingDisplayContent,
+                        )
+                        FlutterLocalNotificationPluginsPlugin.bringHostAppToForegroundOrStart(
+                            applicationContext,
+                        )
+                        stopSelf()
+                    } catch (e: Exception) {
+                        Log.e(TAG, "overlay click failed", e)
+                    }
                 }
             }
         pendingDisplayContent =

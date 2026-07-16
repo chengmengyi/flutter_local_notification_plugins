@@ -21,9 +21,16 @@ class KeepAliveForegroundService : Service() {
     private val heartbeatRunnable =
         object : Runnable {
             override fun run() {
-                verifyAndRefreshForegroundNotification("heartbeat")
-                KeepAliveServiceState.heartbeat(applicationContext)
-                heartbeatHandler.postDelayed(this, HEARTBEAT_INTERVAL_MILLIS)
+                try {
+                    verifyAndRefreshForegroundNotification("heartbeat")
+                    KeepAliveServiceState.heartbeat(applicationContext)
+                } catch (e: Exception) {
+                    Log.e(TAG, "heartbeat failed", e)
+                    runCatching { scheduleRecovery("heartbeat_exception") }
+                } finally {
+                    runCatching { heartbeatHandler.postDelayed(this, HEARTBEAT_INTERVAL_MILLIS) }
+                        .onFailure { Log.e(TAG, "heartbeat reschedule failed", it) }
+                }
             }
         }
 
@@ -106,7 +113,14 @@ class KeepAliveForegroundService : Service() {
             Log.d(TAG, "onTaskRemoved")
             TASK_REMOVED_CHECK_DELAYS.forEach { delayMillis ->
                 heartbeatHandler.postDelayed(
-                    { verifyAndRefreshForegroundNotification("task_removed_${delayMillis}ms") },
+                    {
+                        try {
+                            verifyAndRefreshForegroundNotification("task_removed_${delayMillis}ms")
+                        } catch (e: Exception) {
+                            Log.e(TAG, "taskRemoved refresh failed delay=$delayMillis", e)
+                            runCatching { scheduleRecovery("task_removed_refresh_exception") }
+                        }
+                    },
                     delayMillis,
                 )
             }
@@ -136,19 +150,24 @@ class KeepAliveForegroundService : Service() {
     }
 
     override fun onTimeout(startId: Int, fgsType: Int) {
-        Log.d(
-            TAG,
-            "onTimeout startId=$startId fgsType=$fgsType state=${KeepAliveServiceState.state}",
-        )
-        scheduleRecovery("system_timeout")
-        KeepAliveServiceState.markStopping("system_timeout")
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            stopForeground(STOP_FOREGROUND_REMOVE)
-        } else {
-            @Suppress("DEPRECATION")
-            stopForeground(true)
+        try {
+            Log.d(
+                TAG,
+                "onTimeout startId=$startId fgsType=$fgsType state=${KeepAliveServiceState.state}",
+            )
+            scheduleRecovery("system_timeout")
+            KeepAliveServiceState.markStopping("system_timeout")
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                stopForeground(STOP_FOREGROUND_REMOVE)
+            } else {
+                @Suppress("DEPRECATION")
+                stopForeground(true)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "onTimeout failed startId=$startId fgsType=$fgsType", e)
+        } finally {
+            runCatching { stopSelf(startId) }
         }
-        stopSelf(startId)
     }
 
     private fun scheduleRecovery(reason: String) {
@@ -158,20 +177,20 @@ class KeepAliveForegroundService : Service() {
     }
 
     private fun verifyAndRefreshForegroundNotification(reason: String) {
-        if (KeepAliveServiceState.state != KeepAliveServiceState.State.STARTED) return
-        val before = KeepAliveServiceState.describeForegroundNotification(applicationContext)
-        val notification =
-            KeepAliveNotificationHelper.buildPersistentShortcutNotification(applicationContext)
-                ?: return
         try {
+            if (KeepAliveServiceState.state != KeepAliveServiceState.State.STARTED) return
+            val before = KeepAliveServiceState.describeForegroundNotification(applicationContext)
+            val notification =
+                KeepAliveNotificationHelper.buildPersistentShortcutNotification(applicationContext)
+                    ?: return
             promoteToForeground(notification)
             KeepAliveServiceState.heartbeat(applicationContext)
             val after = KeepAliveServiceState.describeForegroundNotification(applicationContext)
             Log.d(TAG, "verifyAndRefresh reason=$reason before={$before} after={$after}")
         } catch (e: Exception) {
-            Log.d(TAG, "verifyAndRefresh failed reason=$reason before={$before} error=${e.message}")
-            KeepAliveServiceState.markIdle(applicationContext, "refresh_failed:$reason")
-            scheduleRecovery("refresh_failed:$reason")
+            Log.e(TAG, "verifyAndRefresh failed reason=$reason", e)
+            runCatching { KeepAliveServiceState.markIdle(applicationContext, "refresh_failed:$reason") }
+            runCatching { scheduleRecovery("refresh_failed:$reason") }
         }
     }
 

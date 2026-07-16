@@ -21,15 +21,23 @@ class OverlayPermissionGuideActivity : Activity() {
     private val switchRunnable =
         object : Runnable {
             override fun run() {
-                animateSwitchIcon()
-                handler.postDelayed(this, SWITCH_ANIMATION_INTERVAL_MILLIS)
+                try {
+                    animateSwitchIcon()
+                    handler.postDelayed(this, SWITCH_ANIMATION_INTERVAL_MILLIS)
+                } catch (e: Exception) {
+                    Log.e("LocalNotificationPlugin", "switch animation failed", e)
+                }
             }
         }
     private val rightDownIconRunnable =
         object : Runnable {
             override fun run() {
-                animateRightDownIcon()
-                handler.postDelayed(this, RIGHT_DOWN_ANIMATION_INTERVAL_MILLIS)
+                try {
+                    animateRightDownIcon()
+                    handler.postDelayed(this, RIGHT_DOWN_ANIMATION_INTERVAL_MILLIS)
+                } catch (e: Exception) {
+                    Log.e("LocalNotificationPlugin", "guide animation failed", e)
+                }
             }
         }
 

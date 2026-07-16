@@ -54,9 +54,10 @@ abstract class FlutterLocalNotificationPluginsPlatform
     required Map<String, String> headers,
     required Map<String, Object?> payloadTemplate,
     required String distinctIdKey,
-    required String eventIdKey,
-    required String timestampKey,
+    required String logIdKey,
+    required String clientTsKey,
     required String notificationSourceKey,
+    required String packageKey,
   }) {
     throw UnimplementedError(
       'configureNativePushReporting() has not been implemented.',

@@ -63,9 +63,10 @@ class MethodChannelFlutterLocalNotificationPlugins
     required Map<String, String> headers,
     required Map<String, Object?> payloadTemplate,
     required String distinctIdKey,
-    required String eventIdKey,
-    required String timestampKey,
+    required String logIdKey,
+    required String clientTsKey,
     required String notificationSourceKey,
+    required String packageKey,
   }) {
     return methodChannel.invokeMethod<void>('configureNativePushReporting', {
       'enabled': enabled,
@@ -73,9 +74,10 @@ class MethodChannelFlutterLocalNotificationPlugins
       'headers': headers,
       'payloadTemplate': payloadTemplate,
       'distinctIdKey': distinctIdKey,
-      'eventIdKey': eventIdKey,
-      'timestampKey': timestampKey,
+      'logIdKey': logIdKey,
+      'clientTsKey': clientTsKey,
       'notificationSourceKey': notificationSourceKey,
+      'packageKey': packageKey,
     });
   }
 

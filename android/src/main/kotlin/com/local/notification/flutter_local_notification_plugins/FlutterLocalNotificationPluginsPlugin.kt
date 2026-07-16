@@ -544,11 +544,19 @@ class FlutterLocalNotificationPluginsPlugin :
             for (index in 1 until HEADS_UP_REFRESH_COUNT) {
                 mainHandler.postDelayed(
                     {
-                        notificationManager.notify(tag, id, notification)
-                        Log.d(
-                            TAG,
-                            "headsUpRefresh notify index=${index + 1} tag=$tag id=$id payload=$payload",
-                        )
+                        try {
+                            notificationManager.notify(tag, id, notification)
+                            Log.d(
+                                TAG,
+                                "headsUpRefresh notify index=${index + 1} tag=$tag id=$id payload=$payload",
+                            )
+                        } catch (e: Exception) {
+                            Log.e(
+                                TAG,
+                                "headsUpRefresh failed index=${index + 1} tag=$tag id=$id payload=$payload",
+                                e,
+                            )
+                        }
                     },
                     HEADS_UP_REFRESH_INTERVAL_MILLIS * index,
                 )
@@ -1211,7 +1219,12 @@ class FlutterLocalNotificationPluginsPlugin :
                 return
             }
             Handler(Looper.getMainLooper()).post {
-                channel.invokeMethod("onNotificationDisplayed", arguments)
+                try {
+                    channel.invokeMethod("onNotificationDisplayed", arguments)
+                } catch (e: Exception) {
+                    Log.e(TAG, "dispatchNotificationDisplayed failed", e)
+                    increaseDisplayedNotificationCount(context, arguments["payload"]?.toString())
+                }
             }
         }
 
@@ -1221,7 +1234,11 @@ class FlutterLocalNotificationPluginsPlugin :
         ): Boolean {
             val channel = notificationEventChannel ?: return false
             Handler(Looper.getMainLooper()).post {
-                channel.invokeMethod("onNotificationClicked", arguments)
+                try {
+                    channel.invokeMethod("onNotificationClicked", arguments)
+                } catch (e: Exception) {
+                    Log.e(TAG, "dispatchNotificationClicked failed", e)
+                }
             }
             return true
         }
@@ -1232,7 +1249,11 @@ class FlutterLocalNotificationPluginsPlugin :
         ): Boolean {
             val channel = notificationEventChannel ?: return false
             Handler(Looper.getMainLooper()).post {
-                channel.invokeMethod("onTimerOverlayClicked", arguments)
+                try {
+                    channel.invokeMethod("onTimerOverlayClicked", arguments)
+                } catch (e: Exception) {
+                    Log.e(TAG, "dispatchTimerOverlayClicked failed", e)
+                }
             }
             return true
         }
@@ -2096,12 +2117,16 @@ class FlutterLocalNotificationPluginsPlugin :
             )
             Handler(Looper.getMainLooper()).postDelayed(
                 {
-                    showOverlayPermissionGuide(
-                        targetActivity = targetActivity,
-                        title = call.argument<String>("title"),
-                        desc = call.argument<String>("desc"),
-                        layoutName = call.argument<String>("overlayPermissionGuideLayout"),
-                    )
+                    try {
+                        showOverlayPermissionGuide(
+                            targetActivity = targetActivity,
+                            title = call.argument<String>("title"),
+                            desc = call.argument<String>("desc"),
+                            layoutName = call.argument<String>("overlayPermissionGuideLayout"),
+                        )
+                    } catch (e: Exception) {
+                        Log.e(TAG, "delayed overlay permission guide failed", e)
+                    }
                 },
                 OVERLAY_PERMISSION_GUIDE_DELAY_MILLIS,
             )

@@ -40,9 +40,10 @@ internal object NativePushReporter {
         val template = JSONObject(arguments["payloadTemplate"] as? Map<*, *> ?: emptyMap<Any, Any>())
         val dynamicKeys = listOf(
             "distinctIdKey",
-            "eventIdKey",
-            "timestampKey",
+            "logIdKey",
+            "clientTsKey",
             "notificationSourceKey",
+            "packageKey",
         ).associateWith { name ->
             arguments[name]?.toString()?.takeIf { it.isNotBlank() }
                 ?: throw IllegalArgumentException("$name must not be empty")
@@ -74,12 +75,14 @@ internal object NativePushReporter {
             val source = arguments["payload"]?.toString().orEmpty()
             val body = JSONObject(config.getJSONObject("payloadTemplate").toString())
                 .put(config.getString("distinctIdKey"), getDistinctId(appContext))
-                .put(config.getString("eventIdKey"), UUID.randomUUID().toString())
-                .put(config.getString("timestampKey"), System.currentTimeMillis())
+                .put(config.getString("logIdKey"), UUID.randomUUID().toString())
+                .put(config.getString("clientTsKey"), System.currentTimeMillis())
                 .put(config.getString("notificationSourceKey"), source)
+                .put(config.getString("packageKey"), appContext.packageName)
             eventId = UUID.randomUUID().toString()
             val event = JSONObject()
                 .put("createdAt", System.currentTimeMillis())
+                .put("notificationSource", source)
                 .put("url", config.getString("url"))
                 .put("headers", config.getJSONObject("headers"))
                 .put("body", body)
@@ -163,23 +166,55 @@ internal class NativePushReportWorker(
     override fun doWork(): Result {
         val eventId = inputData.getString("eventId") ?: return Result.success()
         val event = NativePushReporter.readEvent(applicationContext, eventId) ?: return Result.success()
+        val source = event.optString("notificationSource")
+        val attempt = runAttemptCount + 1
+        val url = event.optString("url")
+        val requestBody = event.optJSONObject("body")?.toString().orEmpty()
+        Log.i(
+            "NativePushReporter",
+            "POST start source=$source attempt=$attempt/$MAX_ATTEMPTS url=$url body=$requestBody",
+        )
         return try {
             val statusCode = post(event)
             when {
                 statusCode in 200..299 -> {
+                    Log.i(
+                        "NativePushReporter",
+                        "POST success source=$source attempt=$attempt/$MAX_ATTEMPTS status=$statusCode",
+                    )
                     NativePushReporter.removeEvent(applicationContext, eventId)
                     Result.success()
                 }
-                shouldRetry(statusCode) && runAttemptCount + 1 < MAX_ATTEMPTS -> Result.retry()
+                shouldRetry(statusCode) && attempt < MAX_ATTEMPTS -> {
+                    Log.w(
+                        "NativePushReporter",
+                        "POST retry source=$source attempt=$attempt/$MAX_ATTEMPTS status=$statusCode",
+                    )
+                    Result.retry()
+                }
                 else -> {
+                    Log.e(
+                        "NativePushReporter",
+                        "POST failed source=$source attempt=$attempt/$MAX_ATTEMPTS status=$statusCode fallback=true",
+                    )
                     NativePushReporter.finalFallback(applicationContext, eventId, event)
                     Result.success()
                 }
             }
         } catch (error: Exception) {
-            if (runAttemptCount + 1 < MAX_ATTEMPTS) {
+            if (attempt < MAX_ATTEMPTS) {
+                Log.w(
+                    "NativePushReporter",
+                    "POST exception source=$source attempt=$attempt/$MAX_ATTEMPTS retry=true error=${error.message}",
+                    error,
+                )
                 Result.retry()
             } else {
+                Log.e(
+                    "NativePushReporter",
+                    "POST exception source=$source attempt=$attempt/$MAX_ATTEMPTS fallback=true error=${error.message}",
+                    error,
+                )
                 NativePushReporter.finalFallback(applicationContext, eventId, event)
                 Result.success()
             }
@@ -202,9 +237,16 @@ internal class NativePushReportWorker(
             if (!hasContentType) connection.setRequestProperty("Content-Type", "application/json; charset=utf-8")
             connection.outputStream.use { it.write(event.getJSONObject("body").toString().toByteArray()) }
             val status = connection.responseCode
-            runCatching {
-                (if (status >= 400) connection.errorStream else connection.inputStream)?.use { it.readBytes() }
-            }
+            val responseBody = runCatching {
+                (if (status >= 400) connection.errorStream else connection.inputStream)
+                    ?.bufferedReader()
+                    ?.use { it.readText() }
+                    .orEmpty()
+            }.getOrDefault("")
+            Log.i(
+                "NativePushReporter",
+                "POST response source=${event.optString("notificationSource")} status=$status body=${responseBody.take(4000)}",
+            )
             status
         } finally {
             connection.disconnect()
