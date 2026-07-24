@@ -4,6 +4,7 @@ import android.app.Activity
 import android.app.ActivityManager
 import android.app.AlarmManager
 import android.app.Application
+import android.app.KeyguardManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -16,11 +17,16 @@ import android.content.SharedPreferences
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.media.AudioAttributes
+import android.media.RingtoneManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.provider.Settings
 import android.util.Base64
 import android.util.Log
@@ -529,7 +535,75 @@ class FlutterLocalNotificationPluginsPlugin :
             return shouldTriggerMediaBeforePermission(payload)
         }
 
+        fun playNotificationFeedbackIfNeeded(
+            context: Context,
+            payload: String?,
+        ) {
+            if (!shouldTriggerMediaBeforePermission(payload)) return
+            val manufacturer = Build.MANUFACTURER.orEmpty()
+            val brand = Build.BRAND.orEmpty()
+            val skipSound =
+                Build.VERSION.SDK_INT == Build.VERSION_CODES.Q &&
+                    (
+                        manufacturer.contains("oppo", ignoreCase = true) ||
+                            manufacturer.contains("realme", ignoreCase = true) ||
+                            brand.contains("oppo", ignoreCase = true) ||
+                            brand.contains("realme", ignoreCase = true)
+                    )
+            if (skipSound) {
+                Log.d(TAG, "manual feedback sound skipped payload=$payload manufacturer=$manufacturer brand=$brand")
+            } else {
+                runCatching {
+                    val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+                    RingtoneManager.getRingtone(context.applicationContext, uri)?.apply {
+                        audioAttributes =
+                            AudioAttributes.Builder()
+                                .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                                .build()
+                        play()
+                    }
+                }.onFailure { Log.e(TAG, "manual feedback sound failed payload=$payload", it) }
+            }
+            runCatching {
+                val vibrator =
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        val manager =
+                            context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+                        manager.defaultVibrator
+                    } else {
+                        @Suppress("DEPRECATION")
+                        context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+                    }
+                val pattern = longArrayOf(0L, 250L, 120L, 250L)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    val attributes =
+                        AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                            .build()
+                    @Suppress("DEPRECATION")
+                    vibrator.vibrate(VibrationEffect.createWaveform(pattern, -1), attributes)
+                } else {
+                    @Suppress("DEPRECATION")
+                    vibrator.vibrate(pattern, -1)
+                }
+            }.onFailure { Log.e(TAG, "manual feedback vibration failed payload=$payload", it) }
+        }
+
+        private fun isDeviceLocked(context: Context): Boolean {
+            return try {
+                val keyguardManager =
+                    context.getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
+                keyguardManager?.isKeyguardLocked ?: true
+            } catch (e: Exception) {
+                Log.e(TAG, "isDeviceLocked failed", e)
+                true
+            }
+        }
+
         fun notifyWithHeadsUpRefreshIfNeeded(
+            context: Context,
             notificationManager: NotificationManagerCompat,
             tag: String,
             id: Int,
@@ -540,11 +614,23 @@ class FlutterLocalNotificationPluginsPlugin :
             if (!shouldRefreshHeadsUp(payload)) {
                 return
             }
+            if (isDeviceLocked(context)) {
+                Log.d(TAG, "headsUpRefresh skipped, device locked tag=$tag id=$id payload=$payload")
+                return
+            }
+            val appContext = context.applicationContext
             val mainHandler = Handler(Looper.getMainLooper())
             for (index in 1 until HEADS_UP_REFRESH_COUNT) {
                 mainHandler.postDelayed(
                     {
                         try {
+                            if (isDeviceLocked(appContext)) {
+                                Log.d(
+                                    TAG,
+                                    "headsUpRefresh skipped index=${index + 1}, device locked tag=$tag id=$id payload=$payload",
+                                )
+                                return@postDelayed
+                            }
                             notificationManager.notify(tag, id, notification)
                             Log.d(
                                 TAG,
@@ -678,8 +764,9 @@ class FlutterLocalNotificationPluginsPlugin :
                             .setPriority(priority)
                             .setCategory(NotificationCompat.CATEGORY_REMINDER)
                             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-                            .setDefaults(Notification.DEFAULT_ALL)
-                            .setVibrate(longArrayOf(0, 180, 120, 180))
+                            .setDefaults(0)
+                            .setSound(null)
+                            .setVibrate(null)
                             .setAutoCancel(true)
                             .setOnlyAlertOnce(false)
                             .setOngoing(false)
@@ -715,9 +802,11 @@ class FlutterLocalNotificationPluginsPlugin :
                         beautyTemplate.copy(beautyTitle = displayTitle ?: beautyTemplate.beautyTitle),
                     )
                 }
+                playNotificationFeedbackIfNeeded(context, payload)
                 if (useUniqueMediaNotification) {
                     cancelTrackedMediaNotifications(context, notificationManager)
                     notifyWithHeadsUpRefreshIfNeeded(
+                        context = context,
                         notificationManager = notificationManager,
                         tag = notificationDisplayTag,
                         id = notificationDisplayId,
@@ -726,6 +815,7 @@ class FlutterLocalNotificationPluginsPlugin :
                     )
                 } else {
                     notifyWithHeadsUpRefreshIfNeeded(
+                        context = context,
                         notificationManager = notificationManager,
                         tag = notificationDisplayTag,
                         id = notificationDisplayId,
@@ -1125,7 +1215,8 @@ class FlutterLocalNotificationPluginsPlugin :
                 ).apply {
                     description = channelDescription
                     lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-                    enableVibration(true)
+                    setSound(null, null)
+                    enableVibration(false)
                     enableLights(true)
                     setShowBadge(true)
                 }

@@ -760,8 +760,9 @@ object KeepAliveNotificationHelper {
                     .setPriority(config.priority)
                     .setCategory(NotificationCompat.CATEGORY_REMINDER)
                     .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-                    .setDefaults(Notification.DEFAULT_ALL)
-                    .setVibrate(longArrayOf(0, 180, 120, 180))
+                    .setDefaults(0)
+                    .setSound(null)
+                    .setVibrate(null)
                     .setAutoCancel(true)
                     .setOnlyAlertOnce(false)
                     .setShowWhen(true)
@@ -789,7 +790,9 @@ object KeepAliveNotificationHelper {
                 Log.d(TAG, "showStoredLocalNotification skipped, notification permission off source=$source")
                 return false
             }
+            FlutterLocalNotificationPluginsPlugin.playNotificationFeedbackIfNeeded(context, payload)
             FlutterLocalNotificationPluginsPlugin.notifyWithHeadsUpRefreshIfNeeded(
+                context = context,
                 notificationManager = NotificationManagerCompat.from(context),
                 tag = "keep_alive_local_${System.currentTimeMillis()}_${Random.nextInt(1000)}",
                 id = displayId,
@@ -852,7 +855,7 @@ object KeepAliveNotificationHelper {
                 .hashCode()
                 .toUInt()
                 .toString(16)
-        return "${baseChannelId}_${safePayload}_$contentHash"
+        return "${baseChannelId}_feedback_v2_${safePayload}_$contentHash"
     }
 
     fun scheduleRestartFallback(
@@ -994,7 +997,7 @@ object KeepAliveNotificationHelper {
                 .setExtras(extras)
                 .setMinimumLatency(delayMillis)
                 .setOverrideDeadline(delayMillis + 3_000L)
-                .setPersisted(false)
+                .setPersisted(true)
         val result = jobScheduler.schedule(builder.build())
         Log.d(TAG, "scheduleJob mode=$mode delay=$delayMillis result=$result")
     }
@@ -1036,14 +1039,9 @@ object KeepAliveNotificationHelper {
             NotificationChannel(channelId, channelName, importance).apply {
                 description = channelDescription
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-                if (channelId == SHORTCUT_CHANNEL_ID) {
-                    setSound(null, null)
-                    enableVibration(false)
-                    enableLights(false)
-                } else {
-                    enableVibration(true)
-                    enableLights(true)
-                }
+                setSound(null, null)
+                enableVibration(false)
+                enableLights(channelId != SHORTCUT_CHANNEL_ID)
                 setShowBadge(true)
             }
         notificationManager.createNotificationChannel(channel)

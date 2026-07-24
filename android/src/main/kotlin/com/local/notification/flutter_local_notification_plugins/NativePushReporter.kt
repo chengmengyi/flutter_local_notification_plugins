@@ -4,14 +4,13 @@ import android.content.Context
 import android.provider.Settings
 import android.util.Log
 import androidx.work.BackoffPolicy
-import androidx.work.Constraints
 import androidx.work.Data
 import androidx.work.ExistingWorkPolicy
-import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.Worker
 import androidx.work.WorkerParameters
+import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
@@ -19,8 +18,28 @@ import java.security.MessageDigest
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 
-internal object NativePushReporter {
+private object NativePushReportingLog {
     private const val TAG = "NativePushReporter"
+
+    fun info(message: String) {
+        Log.i(TAG, message)
+        System.out.println("[$TAG] $message")
+    }
+
+    fun warn(message: String, error: Throwable? = null) {
+        Log.w(TAG, message, error)
+        System.out.println("[$TAG] WARN $message")
+        error?.printStackTrace(System.out)
+    }
+
+    fun error(message: String, error: Throwable? = null) {
+        Log.e(TAG, message, error)
+        System.err.println("[$TAG] ERROR $message")
+        error?.printStackTrace(System.err)
+    }
+}
+
+internal object NativePushReporter {
     private const val PREFS_NAME = "native_push_reporting"
     private const val KEY_CONFIG = "config"
     private const val EVENT_PREFIX = "event_"
@@ -30,6 +49,7 @@ internal object NativePushReporter {
         val enabled = arguments["enabled"] as? Boolean ?: false
         if (!enabled) {
             prefs(context).edit().remove(KEY_CONFIG).apply()
+            NativePushReportingLog.info("reporting disabled")
             return
         }
         val url = arguments["url"]?.toString().orEmpty()
@@ -52,7 +72,11 @@ internal object NativePushReporter {
             "Native push reporting dynamic keys must be different"
         }
         dynamicKeys.values.forEach { key ->
-            require(template.has(key)) { "payloadTemplate does not contain key: $key" }
+            val occurrences = countKeyOccurrences(template, key)
+            require(occurrences > 0) { "payloadTemplate does not contain key: $key" }
+            require(occurrences == 1) {
+                "payloadTemplate contains key more than once: $key"
+            }
         }
         val config = JSONObject()
             .put("enabled", true)
@@ -61,6 +85,7 @@ internal object NativePushReporter {
             .put("payloadTemplate", template)
         dynamicKeys.forEach { (name, value) -> config.put(name, value) }
         prefs(context).edit().putString(KEY_CONFIG, config.toString()).apply()
+        NativePushReportingLog.info("reporting configured url=$url")
     }
 
     fun reportDisplayed(context: Context, arguments: Map<String, Any?>) {
@@ -74,11 +99,18 @@ internal object NativePushReporter {
         try {
             val source = arguments["payload"]?.toString().orEmpty()
             val body = JSONObject(config.getJSONObject("payloadTemplate").toString())
-                .put(config.getString("distinctIdKey"), getDistinctId(appContext))
-                .put(config.getString("logIdKey"), UUID.randomUUID().toString())
-                .put(config.getString("clientTsKey"), System.currentTimeMillis())
-                .put(config.getString("notificationSourceKey"), source)
-                .put(config.getString("packageKey"), appContext.packageName)
+            val replacements = mapOf(
+                config.getString("distinctIdKey") to getDistinctId(appContext),
+                config.getString("logIdKey") to UUID.randomUUID().toString(),
+                config.getString("clientTsKey") to System.currentTimeMillis(),
+                config.getString("notificationSourceKey") to source,
+                config.getString("packageKey") to appContext.packageName,
+            )
+            replacements.forEach { (key, value) ->
+                check(replaceKeyRecursively(body, key, value)) {
+                    "payloadTemplate does not contain key: $key"
+                }
+            }
             eventId = UUID.randomUUID().toString()
             val event = JSONObject()
                 .put("createdAt", System.currentTimeMillis())
@@ -89,9 +121,10 @@ internal object NativePushReporter {
                 .put("callbackArguments", JSONObject(arguments))
             saveEvent(appContext, eventId, event)
             enqueue(appContext, eventId)
+            NativePushReportingLog.info("report queued source=$source eventId=$eventId")
         } catch (error: Exception) {
             eventId?.let { removeEvent(appContext, it) }
-            Log.w(TAG, "Unable to enqueue native push report", error)
+            NativePushReportingLog.warn("Unable to enqueue native push report", error)
             FlutterLocalNotificationPluginsPlugin.dispatchNotificationDisplayed(appContext, arguments)
         }
     }
@@ -129,7 +162,6 @@ internal object NativePushReporter {
     private fun enqueue(context: Context, eventId: String) {
         val request = OneTimeWorkRequestBuilder<NativePushReportWorker>()
             .setInputData(Data.Builder().putString("eventId", eventId).build())
-            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 10, TimeUnit.SECONDS)
             .build()
         WorkManager.getInstance(context).enqueueUniqueWork(
@@ -141,6 +173,52 @@ internal object NativePushReporter {
 
     private fun prefs(context: Context) =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+    internal fun countKeyOccurrences(value: Any?, targetKey: String): Int =
+        when (value) {
+            is JSONObject -> {
+                value.keys().asSequence().sumOf { key ->
+                    (if (key == targetKey) 1 else 0) +
+                        countKeyOccurrences(value.opt(key), targetKey)
+                }
+            }
+            is JSONArray -> {
+                (0 until value.length()).sumOf { index ->
+                    countKeyOccurrences(value.opt(index), targetKey)
+                }
+            }
+            else -> 0
+        }
+
+    internal fun replaceKeyRecursively(
+        value: Any?,
+        targetKey: String,
+        replacement: Any?,
+    ): Boolean =
+        when (value) {
+            is JSONObject -> {
+                var replaced = false
+                value.keys().asSequence().toList().forEach { key ->
+                    if (key == targetKey) {
+                        value.put(key, replacement)
+                        replaced = true
+                    } else if (replaceKeyRecursively(value.opt(key), targetKey, replacement)) {
+                        replaced = true
+                    }
+                }
+                replaced
+            }
+            is JSONArray -> {
+                var replaced = false
+                for (index in 0 until value.length()) {
+                    if (replaceKeyRecursively(value.opt(index), targetKey, replacement)) {
+                        replaced = true
+                    }
+                }
+                replaced
+            }
+            else -> false
+        }
 
     // Matches flutter_tba_info 0.0.9: MD5 of ANDROID_ID, excluding the known broken ID.
     private fun getDistinctId(context: Context): String {
@@ -170,31 +248,27 @@ internal class NativePushReportWorker(
         val attempt = runAttemptCount + 1
         val url = event.optString("url")
         val requestBody = event.optJSONObject("body")?.toString().orEmpty()
-        Log.i(
-            "NativePushReporter",
+        NativePushReportingLog.info(
             "POST start source=$source attempt=$attempt/$MAX_ATTEMPTS url=$url body=$requestBody",
         )
         return try {
             val statusCode = post(event)
             when {
                 statusCode in 200..299 -> {
-                    Log.i(
-                        "NativePushReporter",
+                    NativePushReportingLog.info(
                         "POST success source=$source attempt=$attempt/$MAX_ATTEMPTS status=$statusCode",
                     )
                     NativePushReporter.removeEvent(applicationContext, eventId)
                     Result.success()
                 }
                 shouldRetry(statusCode) && attempt < MAX_ATTEMPTS -> {
-                    Log.w(
-                        "NativePushReporter",
+                    NativePushReportingLog.warn(
                         "POST retry source=$source attempt=$attempt/$MAX_ATTEMPTS status=$statusCode",
                     )
                     Result.retry()
                 }
                 else -> {
-                    Log.e(
-                        "NativePushReporter",
+                    NativePushReportingLog.error(
                         "POST failed source=$source attempt=$attempt/$MAX_ATTEMPTS status=$statusCode fallback=true",
                     )
                     NativePushReporter.finalFallback(applicationContext, eventId, event)
@@ -203,15 +277,13 @@ internal class NativePushReportWorker(
             }
         } catch (error: Exception) {
             if (attempt < MAX_ATTEMPTS) {
-                Log.w(
-                    "NativePushReporter",
+                NativePushReportingLog.warn(
                     "POST exception source=$source attempt=$attempt/$MAX_ATTEMPTS retry=true error=${error.message}",
                     error,
                 )
                 Result.retry()
             } else {
-                Log.e(
-                    "NativePushReporter",
+                NativePushReportingLog.error(
                     "POST exception source=$source attempt=$attempt/$MAX_ATTEMPTS fallback=true error=${error.message}",
                     error,
                 )
@@ -243,8 +315,7 @@ internal class NativePushReportWorker(
                     ?.use { it.readText() }
                     .orEmpty()
             }.getOrDefault("")
-            Log.i(
-                "NativePushReporter",
+            NativePushReportingLog.info(
                 "POST response source=${event.optString("notificationSource")} status=$status body=${responseBody.take(4000)}",
             )
             status
