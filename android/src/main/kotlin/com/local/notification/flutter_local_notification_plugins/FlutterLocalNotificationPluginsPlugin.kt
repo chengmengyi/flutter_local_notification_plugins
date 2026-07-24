@@ -160,6 +160,7 @@ class FlutterLocalNotificationPluginsPlugin :
         private const val EXTRA_MEDIA_BACKGROUND_IMAGE_NAME = "mediaBackgroundImageName"
         private const val EXTRA_REPLACE_EXISTING = "replaceExisting"
         private const val KEY_MEDIA_DISPLAYED_NOTIFICATIONS = "media_displayed_notifications"
+        private const val KEY_MEDIA_TRACKING_MIGRATED_V1 = "media_tracking_migrated_v1"
         private const val TAG = "LocalNotificationPlugin"
         private const val UNLOCK_BASE_ID = 10002
         private const val FCM_BASE_ID = 10003
@@ -605,12 +606,12 @@ class FlutterLocalNotificationPluginsPlugin :
         fun notifyWithHeadsUpRefreshIfNeeded(
             context: Context,
             notificationManager: NotificationManagerCompat,
-            tag: String,
+            tag: String?,
             id: Int,
             notification: Notification,
             payload: String?,
         ) {
-            notificationManager.notify(tag, id, notification)
+            notify(notificationManager, tag, id, notification)
             if (!shouldRefreshHeadsUp(payload)) {
                 return
             }
@@ -631,7 +632,7 @@ class FlutterLocalNotificationPluginsPlugin :
                                 )
                                 return@postDelayed
                             }
-                            notificationManager.notify(tag, id, notification)
+                            notify(notificationManager, tag, id, notification)
                             Log.d(
                                 TAG,
                                 "headsUpRefresh notify index=${index + 1} tag=$tag id=$id payload=$payload",
@@ -646,6 +647,19 @@ class FlutterLocalNotificationPluginsPlugin :
                     },
                     HEADS_UP_REFRESH_INTERVAL_MILLIS * index,
                 )
+            }
+        }
+
+        private fun notify(
+            notificationManager: NotificationManagerCompat,
+            tag: String?,
+            id: Int,
+            notification: Notification,
+        ) {
+            if (tag.isNullOrBlank()) {
+                notificationManager.notify(id, notification)
+            } else {
+                notificationManager.notify(tag, id, notification)
             }
         }
 
@@ -713,9 +727,11 @@ class FlutterLocalNotificationPluginsPlugin :
                 }
                 val notificationManager = NotificationManagerCompat.from(context)
                 val useUniqueMediaNotification = replaceExistingMedia && payload == "media"
-                val notificationDisplayTag =
+                val notificationDisplayTag: String? =
                     if (useUniqueMediaNotification) {
                         MEDIA_UNIQUE_TAG
+                    } else if (payload == "media") {
+                        null
                     } else {
                         "local_notification_${baseId}_${System.currentTimeMillis()}_${Random.nextInt(100000)}"
                     }
@@ -755,6 +771,7 @@ class FlutterLocalNotificationPluginsPlugin :
                             body = body,
                             contentIntent = clickPendingIntent,
                             mediaImage = mediaImage,
+                            ongoing = replaceExistingMedia,
                         ) ?: return
                     } else {
                         NotificationCompat.Builder(context, runtimeChannelId)
@@ -822,9 +839,6 @@ class FlutterLocalNotificationPluginsPlugin :
                         notification = builder.build(),
                         payload = payload,
                     )
-                    if (payload == "media") {
-                        trackMediaNotification(context, notificationDisplayTag, notificationDisplayId)
-                    }
                 }
                 if (dispatchDisplayedAfterNotify) {
                     NativePushReporter.reportDisplayed(
@@ -855,6 +869,7 @@ class FlutterLocalNotificationPluginsPlugin :
             body: String?,
             contentIntent: PendingIntent?,
             mediaImage: String?,
+            ongoing: Boolean,
         ): NotificationCompat.Builder? {
             val bitmap = resolveMediaBitmap(context, mediaImage)
             val builder =
@@ -865,7 +880,7 @@ class FlutterLocalNotificationPluginsPlugin :
                     .setPriority(NotificationCompat.PRIORITY_MAX)
                     .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
                     .setOnlyAlertOnce(true)
-                    .setOngoing(false)
+                    .setOngoing(ongoing)
                     .setAutoCancel(false)
                     .setShowWhen(true)
                     .setWhen(System.currentTimeMillis())
@@ -1243,18 +1258,28 @@ class FlutterLocalNotificationPluginsPlugin :
             Log.d(TAG, "saveShowMediaTag showMedia=$showMedia")
         }
 
-        private fun trackMediaNotification(
-            context: Context,
-            tag: String,
-            id: Int,
-        ) {
+        private fun migrateLegacyMediaNotificationTracking(context: Context) {
             val sharedPrefs = prefs(context)
+            if (sharedPrefs.getBoolean(KEY_MEDIA_TRACKING_MIGRATED_V1, false)) {
+                return
+            }
             val tracked =
                 sharedPrefs.getStringSet(KEY_MEDIA_DISPLAYED_NOTIFICATIONS, emptySet())
-                    ?.toMutableSet()
-                    ?: mutableSetOf()
-            tracked.add("$tag\u0001$id")
-            sharedPrefs.edit().putStringSet(KEY_MEDIA_DISPLAYED_NOTIFICATIONS, tracked).apply()
+                    ?: emptySet()
+            val notificationManager = NotificationManagerCompat.from(context)
+            for (raw in tracked) {
+                val parts = raw.split("\u0001")
+                val tag = parts.getOrNull(0)
+                val id = parts.getOrNull(1)?.toIntOrNull()
+                if (!tag.isNullOrBlank() && id != null) {
+                    notificationManager.cancel(tag, id)
+                }
+            }
+            sharedPrefs
+                .edit()
+                .remove(KEY_MEDIA_DISPLAYED_NOTIFICATIONS)
+                .putBoolean(KEY_MEDIA_TRACKING_MIGRATED_V1, true)
+                .apply()
         }
 
         private fun cancelTrackedMediaNotifications(
@@ -2754,6 +2779,7 @@ class FlutterLocalNotificationPluginsPlugin :
             KeepAliveNotificationHelper.scheduleShortMonitorJob(applicationContext)
         }
         if (payload == "media") {
+            migrateLegacyMediaNotificationTracking(applicationContext)
             val reflectionConfig =
                 parseMediaReflectionConfig(
                     call.argument<Map<String, Any?>>("reflectionConfig"),
