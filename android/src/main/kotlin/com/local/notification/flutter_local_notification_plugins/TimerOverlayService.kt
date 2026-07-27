@@ -58,6 +58,10 @@ class TimerOverlayService : Service() {
             useLastPdfInfo: Boolean,
             continueReadingStr: String?,
         ) {
+            if (FlutterLocalNotificationPluginsPlugin.isDocumentScannerVisible(context)) {
+                Log.d(TAG, "show skipped, document scanner visible")
+                return
+            }
             if (!TimerOverlayHelper.canDrawOverlaysByReflection(context)) {
                 Log.d(TAG, "show skipped, overlay permission missing")
                 return
@@ -119,6 +123,11 @@ class TimerOverlayService : Service() {
                 stopSelf()
                 return START_NOT_STICKY
             }
+            if (FlutterLocalNotificationPluginsPlugin.isDocumentScannerVisible(applicationContext)) {
+                Log.d(TAG, "onStartCommand skipped, document scanner visible")
+                stopSelf()
+                return START_NOT_STICKY
+            }
             if (!TimerOverlayHelper.canDrawOverlaysByReflection(applicationContext)) {
                 stopSelf()
                 return START_NOT_STICKY
@@ -170,6 +179,11 @@ class TimerOverlayService : Service() {
         useLastPdfInfo: Boolean,
         continueReadingStr: String?,
     ) {
+        if (FlutterLocalNotificationPluginsPlugin.isDocumentScannerVisible(applicationContext)) {
+            Log.d(TAG, "showOverlay skipped, document scanner visible")
+            stopSelf()
+            return
+        }
         removeOverlay()
         val layoutResId = resources.getIdentifier(layoutName, "layout", packageName)
         if (layoutResId == 0) {

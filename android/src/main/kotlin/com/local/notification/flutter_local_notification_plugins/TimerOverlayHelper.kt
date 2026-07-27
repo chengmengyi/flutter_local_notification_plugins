@@ -4,6 +4,8 @@ import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.view.View
 import org.json.JSONArray
@@ -67,6 +69,7 @@ object TimerOverlayHelper {
     private const val DEFAULT_TIMER_OVERLAY_INTERVAL_MILLIS = 20L * 60L * 1000L
     private const val DEFAULT_TIMER_OVERLAY_CD_TIME_MINUTES = 1
     private const val MINUTE_MILLIS = 60L * 1000L
+    private const val SCANNER_VISIBILITY_SETTLE_DELAY_MILLIS = 1000L
     private const val PART_SEPARATOR = "\u0001"
 
     data class TimerOverlayReflectionConfig(
@@ -343,7 +346,32 @@ object TimerOverlayHelper {
         context: Context,
         config: TimerOverlayConfig,
         source: String,
+        allowScannerVisibilitySettlement: Boolean = true,
     ): Boolean {
+        if (FlutterLocalNotificationPluginsPlugin.isDocumentScannerVisible(context)) {
+            Log.d(TAG, "tryShowOverlay skipped, document scanner visible source=$source")
+            return false
+        }
+        if (
+            allowScannerVisibilitySettlement &&
+            FlutterLocalNotificationPluginsPlugin.isDocumentScanning()
+        ) {
+            val appContext = context.applicationContext
+            Log.d(TAG, "tryShowOverlay deferred, document scanner visibility settling source=$source")
+            Handler(Looper.getMainLooper()).postDelayed(
+                {
+                    val currentConfig = readConfig(appContext) ?: return@postDelayed
+                    tryShowOverlay(
+                        context = appContext,
+                        config = currentConfig,
+                        source = "$source:scanner_settled",
+                        allowScannerVisibilitySettlement = false,
+                    )
+                },
+                SCANNER_VISIBILITY_SETTLE_DELAY_MILLIS,
+            )
+            return false
+        }
         if (FlutterLocalNotificationPluginsPlugin.isHostActivityInForeground()) {
             Log.d(TAG, "tryShowOverlay skipped, app foreground source=$source")
             return false

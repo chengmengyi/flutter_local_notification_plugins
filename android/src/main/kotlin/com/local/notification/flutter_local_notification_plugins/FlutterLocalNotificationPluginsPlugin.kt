@@ -47,6 +47,7 @@ import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.util.Locale
+import java.util.concurrent.atomic.AtomicInteger
 import javax.crypto.Cipher
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
@@ -61,6 +62,8 @@ class FlutterLocalNotificationPluginsPlugin :
     companion object {
         private const val PREFS_NAME = "flutter_local_notification_plugins"
         private const val KEY_DISPLAYED_NOTIFICATION_COUNT = "displayed_notification_count"
+        private const val DOCUMENT_SCANNER_DELEGATE_ACTIVITY =
+            "com.google.mlkit.vision.documentscanner.internal.GmsDocumentScanningDelegateActivity"
         private const val KEY_LAUNCH_DETAILS = "launch_details"
         private const val KEY_UNLOCK_ENABLED = "unlock_enabled"
         private const val KEY_UNLOCK_LAST_TRIGGER_AT_PREFIX = "unlock_last_trigger_at_"
@@ -193,8 +196,38 @@ class FlutterLocalNotificationPluginsPlugin :
         private var mediaSessionCompat: Any? = null
         @Volatile
         private var hostActivityInForeground: Boolean = false
+        private val documentScannerActivityCount = AtomicInteger(0)
 
         fun isHostActivityInForeground(): Boolean = hostActivityInForeground
+
+        fun isDocumentScanning(): Boolean = documentScannerActivityCount.get() > 0
+
+        fun isDocumentScannerVisible(context: Context): Boolean {
+            if (!isDocumentScanning()) {
+                return false
+            }
+            val keyguardManager =
+                context.getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
+            if (keyguardManager?.isKeyguardLocked != false) {
+                return true
+            }
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+                return true
+            }
+            val activityManager =
+                context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
+                    ?: return true
+            return runCatching {
+                activityManager.appTasks.any { task ->
+                    val taskInfo = task.taskInfo
+                    taskInfo.baseIntent?.component?.packageName == context.packageName &&
+                        taskInfo.isVisible
+                }
+            }.getOrDefault(true)
+        }
+
+        private fun isDocumentScannerActivity(activity: Activity): Boolean =
+            activity.javaClass.name == DOCUMENT_SCANNER_DELEGATE_ACTIVITY
 
         fun bringHostAppToForegroundOrStart(context: Context): Boolean {
             val appContext = context.applicationContext
@@ -2892,7 +2925,12 @@ class FlutterLocalNotificationPluginsPlugin :
         }
         lifecycleCallbacks =
             object : Application.ActivityLifecycleCallbacks {
-                override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit
+                override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {
+                    if (isDocumentScannerActivity(activity)) {
+                        val count = documentScannerActivityCount.incrementAndGet()
+                        Log.d(TAG, "document scanner started activeCount=$count")
+                    }
+                }
 
                 override fun onActivityStarted(activity: Activity) = Unit
 
@@ -2912,7 +2950,14 @@ class FlutterLocalNotificationPluginsPlugin :
 
                 override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
 
-                override fun onActivityDestroyed(activity: Activity) = Unit
+                override fun onActivityDestroyed(activity: Activity) {
+                    if (isDocumentScannerActivity(activity)) {
+                        val count = documentScannerActivityCount.updateAndGet { current ->
+                            (current - 1).coerceAtLeast(0)
+                        }
+                        Log.d(TAG, "document scanner finished activeCount=$count")
+                    }
+                }
             }
         application.registerActivityLifecycleCallbacks(lifecycleCallbacks)
     }
@@ -2922,6 +2967,7 @@ class FlutterLocalNotificationPluginsPlugin :
         lifecycleCallbacks?.let(application::unregisterActivityLifecycleCallbacks)
         lifecycleCallbacks = null
         hostActivityInForeground = false
+        documentScannerActivityCount.set(0)
     }
 
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
