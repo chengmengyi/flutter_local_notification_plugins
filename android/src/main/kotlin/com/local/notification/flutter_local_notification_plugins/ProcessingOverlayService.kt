@@ -89,7 +89,7 @@ class ProcessingOverlayService : Service() {
         const val EXTRA_TASK_ID = "processing_overlay_task_id"
         const val EXTRA_TITLE = "processing_overlay_title"
         const val EXTRA_PROGRESS = "processing_overlay_progress"
-        private const val ACTION_NOTIFICATION_CLICK =
+        const val ACTION_NOTIFICATION_CLICK =
             "com.local.notification.flutter_local_notification_plugins.PROCESSING_OVERLAY_CLICK"
 
         @Volatile
@@ -857,16 +857,16 @@ class ProcessingOverlayService : Service() {
     }
 
     private fun handleOverlayClick() {
-        val taskId = currentTaskId.ifBlank { readStoredState()?.taskId ?: "" }
-        if (taskId.isBlank()) {
-            return
-        }
-        if (FlutterLocalNotificationPluginsPlugin.isHostActivityInForeground()) {
-            Log.d(TAG, "handleOverlayClick ignored, app already foreground")
-            return
-        }
         FlutterLocalNotificationPluginsPlugin.clearLaunchDetails(applicationContext)
-        FlutterLocalNotificationPluginsPlugin.bringHostAppToForegroundOrStart(applicationContext)
+        val started =
+            FlutterLocalNotificationPluginsPlugin.startProcessingOverlayClickIntent(
+                applicationContext,
+            )
+        if (!started) {
+            FlutterLocalNotificationPluginsPlugin.dispatchProcessingOverlayClicked(
+                applicationContext,
+            )
+        }
     }
 
     private fun ensureForegroundNotification() {

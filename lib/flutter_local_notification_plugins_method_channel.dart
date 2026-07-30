@@ -15,7 +15,7 @@ class MethodChannelFlutterLocalNotificationPlugins
 
   ValueChanged<LocalNotificationEvent>? onNotificationDisplayed;
   ValueChanged<LocalNotificationEvent>? onNotificationClicked;
-  ValueChanged<String>? onProcessingOverlayClicked;
+  VoidCallback? onProcessingOverlayClicked;
   ValueChanged<TimerOverlayClickEvent>? onTimerOverlayClicked;
 
   MethodChannelFlutterLocalNotificationPlugins() {
@@ -476,11 +476,7 @@ class MethodChannelFlutterLocalNotificationPlugins
         onNotificationClicked?.call(LocalNotificationEvent.fromMap(args));
         break;
       case 'onProcessingOverlayClicked':
-        final args = (call.arguments as Map?) ?? <dynamic, dynamic>{};
-        final taskId = args['taskId']?.toString();
-        if (taskId != null && taskId.isNotEmpty) {
-          onProcessingOverlayClicked?.call(taskId);
-        }
+        onProcessingOverlayClicked?.call();
         break;
       case 'onTimerOverlayClicked':
         final args = (call.arguments as Map?) ?? <dynamic, dynamic>{};

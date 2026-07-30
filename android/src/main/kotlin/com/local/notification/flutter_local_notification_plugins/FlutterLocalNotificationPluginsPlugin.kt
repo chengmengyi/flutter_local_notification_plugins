@@ -144,6 +144,20 @@ class FlutterLocalNotificationPluginsPlugin :
         private const val EXTRA_NOTIFICATION_LIST = "notificationList"
         private const val EXTRA_REPEAT_INTERVAL = "repeatIntervalMilliseconds"
         private const val EXTRA_CLICK_EVENT = "flutter_local_notification_click_event"
+        private const val EXTRA_TIMER_OVERLAY_CLICK_EVENT =
+            "flutter_local_notification_timer_overlay_click_event"
+        private const val EXTRA_TIMER_OVERLAY_TIMESTAMP =
+            "flutter_local_notification_timer_overlay_timestamp"
+        private const val EXTRA_TIMER_OVERLAY_LAYOUT_NAME =
+            "flutter_local_notification_timer_overlay_layout_name"
+        private const val EXTRA_TIMER_OVERLAY_SUBTITLE =
+            "flutter_local_notification_timer_overlay_subtitle"
+        private const val EXTRA_TIMER_OVERLAY_BUTTON =
+            "flutter_local_notification_timer_overlay_button"
+        private const val EXTRA_TIMER_OVERLAY_BUTTON_2 =
+            "flutter_local_notification_timer_overlay_button_2"
+        private const val EXTRA_TIMER_OVERLAY_APP_STATE =
+            "flutter_local_notification_timer_overlay_app_state"
         const val EXTRA_NOTIFICATION_DISPLAY_ID = "notificationDisplayId"
         const val EXTRA_NOTIFICATION_DISPLAY_TAG = "notificationDisplayTag"
         private const val EXTRA_MEDIA_ACTION = "flutter_local_notification_media_action"
@@ -156,6 +170,8 @@ class FlutterLocalNotificationPluginsPlugin :
             "flutter_local_notification_overlay_permission_guide_layout"
         private const val ACTION_NOTIFICATION_CLICK =
             "com.local.notification.flutter_local_notification_plugins.NOTIFICATION_CLICK"
+        private const val ACTION_TIMER_OVERLAY_CLICK =
+            "com.local.notification.flutter_local_notification_plugins.TIMER_OVERLAY_CLICK"
         private const val EXTRA_PRIORITY = "priority"
         private const val EXTRA_IMPORTANCE = "importance"
         private const val EXTRA_STYLE = "style"
@@ -445,6 +461,67 @@ class FlutterLocalNotificationPluginsPlugin :
                         Intent.FLAG_ACTIVITY_CLEAR_TOP or
                         Intent.FLAG_ACTIVITY_NO_ANIMATION,
                 )
+            }
+        }
+
+        fun startTimerOverlayClickIntent(
+            context: Context,
+            event: Map<String, Any?>,
+        ): Boolean {
+            val appContext = context.applicationContext
+            val launchIntent =
+                appContext.packageManager.getLaunchIntentForPackage(appContext.packageName)
+                    ?: return false
+            launchIntent.apply {
+                action = ACTION_TIMER_OVERLAY_CLICK
+                putExtra(EXTRA_TIMER_OVERLAY_CLICK_EVENT, true)
+                putExtra(
+                    EXTRA_TIMER_OVERLAY_TIMESTAMP,
+                    event["timestamp"]?.toString()?.toLongOrNull() ?: System.currentTimeMillis(),
+                )
+                putExtra(EXTRA_TIMER_OVERLAY_LAYOUT_NAME, event["layoutName"]?.toString())
+                putExtra(EXTRA_TITLE, event["title"]?.toString())
+                putExtra(EXTRA_TIMER_OVERLAY_SUBTITLE, event["subtitle"]?.toString())
+                putExtra(EXTRA_TIMER_OVERLAY_BUTTON, event["button"]?.toString())
+                putExtra(EXTRA_TIMER_OVERLAY_BUTTON_2, event["button2"]?.toString())
+                putExtra(EXTRA_TIMER_OVERLAY_APP_STATE, event["appState"]?.toString())
+                addFlags(
+                    Intent.FLAG_ACTIVITY_NEW_TASK or
+                        Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                        Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                        Intent.FLAG_ACTIVITY_NO_ANIMATION,
+                )
+            }
+            return try {
+                appContext.startActivity(launchIntent)
+                true
+            } catch (e: Exception) {
+                Log.d(TAG, "startTimerOverlayClickIntent failed error=${e.message}")
+                false
+            }
+        }
+
+        fun startProcessingOverlayClickIntent(context: Context): Boolean {
+            val appContext = context.applicationContext
+            val launchIntent =
+                appContext.packageManager.getLaunchIntentForPackage(appContext.packageName)
+                    ?: return false
+            launchIntent.apply {
+                action = ProcessingOverlayService.ACTION_NOTIFICATION_CLICK
+                putExtra(ProcessingOverlayService.EXTRA_CLICK_EVENT, true)
+                addFlags(
+                    Intent.FLAG_ACTIVITY_NEW_TASK or
+                        Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                        Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                        Intent.FLAG_ACTIVITY_NO_ANIMATION,
+                )
+            }
+            return try {
+                appContext.startActivity(launchIntent)
+                true
+            } catch (e: Exception) {
+                Log.d(TAG, "startProcessingOverlayClickIntent failed error=${e.message}")
+                false
             }
         }
 
@@ -1407,6 +1484,18 @@ class FlutterLocalNotificationPluginsPlugin :
             return true
         }
 
+        fun dispatchProcessingOverlayClicked(context: Context): Boolean {
+            val channel = notificationEventChannel ?: return false
+            Handler(Looper.getMainLooper()).post {
+                try {
+                    channel.invokeMethod("onProcessingOverlayClicked", emptyMap<String, Any?>())
+                } catch (e: Exception) {
+                    Log.e(TAG, "dispatchProcessingOverlayClicked failed", e)
+                }
+            }
+            return true
+        }
+
         fun cacheLaunchDetails(context: Context, arguments: Map<String, Any?>) {
             val raw =
                 listOf(
@@ -1427,6 +1516,18 @@ class FlutterLocalNotificationPluginsPlugin :
                 "body" to intent.getStringExtra(EXTRA_BODY),
                 "payload" to payload,
                 "payloadType" to (intent.getStringExtra(EXTRA_PAYLOAD_TYPE) ?: payload),
+            )
+        }
+
+        private fun extractTimerOverlayClickEvent(intent: Intent): Map<String, Any?> {
+            return mapOf(
+                "timestamp" to intent.getLongExtra(EXTRA_TIMER_OVERLAY_TIMESTAMP, 0L),
+                "layoutName" to intent.getStringExtra(EXTRA_TIMER_OVERLAY_LAYOUT_NAME),
+                "title" to intent.getStringExtra(EXTRA_TITLE),
+                "subtitle" to intent.getStringExtra(EXTRA_TIMER_OVERLAY_SUBTITLE),
+                "button" to intent.getStringExtra(EXTRA_TIMER_OVERLAY_BUTTON),
+                "button2" to intent.getStringExtra(EXTRA_TIMER_OVERLAY_BUTTON_2),
+                "appState" to intent.getStringExtra(EXTRA_TIMER_OVERLAY_APP_STATE),
             )
         }
 
@@ -2976,6 +3077,7 @@ class FlutterLocalNotificationPluginsPlugin :
         hostActivityInForeground = true
         binding.addOnNewIntentListener(this)
         binding.addActivityResultListener(this)
+        handleTimerOverlayClickIntent(binding.activity.intent, fromLaunch = true)
         handleClickIntent(binding.activity.intent, fromLaunch = true)
         handleProcessingOverlayIntent(binding.activity.intent, fromLaunch = true)
     }
@@ -2999,9 +3101,10 @@ class FlutterLocalNotificationPluginsPlugin :
     }
 
     override fun onNewIntent(intent: Intent): Boolean {
+        val handledTimerOverlay = handleTimerOverlayClickIntent(intent, fromLaunch = false)
         val handledNotification = handleClickIntent(intent, fromLaunch = false)
         val handledProcessingOverlay = handleProcessingOverlayIntent(intent, fromLaunch = false)
-        return handledNotification || handledProcessingOverlay
+        return handledTimerOverlay || handledNotification || handledProcessingOverlay
     }
 
     override fun onActivityResult(
@@ -3047,6 +3150,25 @@ class FlutterLocalNotificationPluginsPlugin :
         return true
     }
 
+    private fun handleTimerOverlayClickIntent(
+        intent: Intent?,
+        fromLaunch: Boolean,
+    ): Boolean {
+        if (intent?.getBooleanExtra(EXTRA_TIMER_OVERLAY_CLICK_EVENT, false) != true) {
+            return false
+        }
+        if (isLaunchedFromHistory(intent)) {
+            intent.removeExtra(EXTRA_TIMER_OVERLAY_CLICK_EVENT)
+            return false
+        }
+        val event = extractTimerOverlayClickEvent(intent)
+        if (!fromLaunch) {
+            dispatchTimerOverlayClicked(applicationContext, event)
+        }
+        intent.removeExtra(EXTRA_TIMER_OVERLAY_CLICK_EVENT)
+        return true
+    }
+
     private fun handleProcessingOverlayIntent(
         intent: Intent?,
         fromLaunch: Boolean,
@@ -3055,18 +3177,11 @@ class FlutterLocalNotificationPluginsPlugin :
             return false
         }
         val taskId = intent.getStringExtra(ProcessingOverlayService.EXTRA_TASK_ID)
-        if (taskId.isNullOrBlank()) {
-            return false
-        }
         clearLaunchDetails(applicationContext)
-        if (fromLaunch || activityBinding == null) {
+        if (!taskId.isNullOrBlank() && (fromLaunch || activityBinding == null)) {
             ProcessingOverlayService.cacheLaunchTaskId(applicationContext, taskId)
-        } else {
-            channel.invokeMethod(
-                "onProcessingOverlayClicked",
-                mapOf("taskId" to taskId),
-            )
         }
+        dispatchProcessingOverlayClicked(applicationContext)
         intent.removeExtra(ProcessingOverlayService.EXTRA_CLICK_EVENT)
         return true
     }

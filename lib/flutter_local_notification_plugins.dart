@@ -21,7 +21,7 @@ class FlutterLocalNotificationPlugins {
   void setListeners({
     void Function(LocalNotificationEvent event)? onNotificationDisplayed,
     void Function(LocalNotificationEvent event)? onNotificationClicked,
-    void Function(String taskId)? onProcessingOverlayClicked,
+    void Function()? onProcessingOverlayClicked,
     void Function(TimerOverlayClickEvent event)? onTimerOverlayClicked,
   }) {
     final platform = FlutterLocalNotificationPluginsPlatform.instance;

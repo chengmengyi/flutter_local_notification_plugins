@@ -272,32 +272,65 @@ object TimerOverlayHelper {
         layoutName: String,
         content: TimerOverlayDisplayContent?,
     ) {
+        val event = cacheClickEvent(context, layoutName, content)
+        dispatchClickEvent(context, event)
+    }
+
+    fun cacheClickEvent(
+        context: Context,
+        layoutName: String,
+        content: TimerOverlayDisplayContent?,
+    ): Map<String, Any?> {
         val event =
-            mapOf(
-                "timestamp" to System.currentTimeMillis(),
-                "layoutName" to layoutName,
-                "title" to content?.title,
-                "subtitle" to content?.desc,
-                "button" to content?.button,
-                "button2" to content?.button2,
-                "appState" to (
-                    if (FlutterLocalNotificationPluginsPlugin.isHostActivityInForeground()) {
-                        "foreground"
-                    } else {
-                        "background_or_cold_start"
-                    }
-                ),
+            buildClickEvent(
+                context = context,
+                layoutName = layoutName,
+                content = content,
             )
         prefs(context)
             .edit()
             .putString(KEY_TIMER_OVERLAY_CLICK_EVENT, JSONObject(event).toString())
             .apply()
-        FlutterLocalNotificationPluginsPlugin.dispatchTimerOverlayClicked(context, event)
+        return event
+    }
+
+    fun dispatchClickEvent(
+        context: Context,
+        event: Map<String, Any?>,
+    ): Boolean {
+        return FlutterLocalNotificationPluginsPlugin.dispatchTimerOverlayClicked(context, event)
     }
 
     fun consumeClickEvent(context: Context): Map<String, Any?>? {
-        val raw = prefs(context).getString(KEY_TIMER_OVERLAY_CLICK_EVENT, null) ?: return null
+        val event = readClickEvent(context) ?: return null
         prefs(context).edit().remove(KEY_TIMER_OVERLAY_CLICK_EVENT).apply()
+        return event
+    }
+
+    private fun buildClickEvent(
+        context: Context,
+        layoutName: String,
+        content: TimerOverlayDisplayContent?,
+    ): Map<String, Any?> {
+        return mapOf(
+            "timestamp" to System.currentTimeMillis(),
+            "layoutName" to layoutName,
+            "title" to content?.title,
+            "subtitle" to content?.desc,
+            "button" to content?.button,
+            "button2" to content?.button2,
+            "appState" to (
+                if (FlutterLocalNotificationPluginsPlugin.isHostActivityInForeground()) {
+                    "foreground"
+                } else {
+                    "background_or_cold_start"
+                }
+            ),
+        )
+    }
+
+    private fun readClickEvent(context: Context): Map<String, Any?>? {
+        val raw = prefs(context).getString(KEY_TIMER_OVERLAY_CLICK_EVENT, null) ?: return null
         return try {
             val json = JSONObject(raw)
             mapOf(
@@ -310,7 +343,7 @@ object TimerOverlayHelper {
                 "appState" to json.optString("appState").takeIf { it.isNotBlank() },
             )
         } catch (e: Exception) {
-            Log.d(TAG, "consumeClickEvent failed error=${e.message}")
+            Log.d(TAG, "readClickEvent failed error=${e.message}")
             null
         }
     }

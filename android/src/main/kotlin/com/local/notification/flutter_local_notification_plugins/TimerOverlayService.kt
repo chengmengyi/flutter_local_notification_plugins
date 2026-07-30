@@ -197,15 +197,22 @@ class TimerOverlayService : Service() {
                 setOnClickListener {
                     try {
                         FlutterLocalNotificationPluginsPlugin.clearLaunchDetails(applicationContext)
-                        TimerOverlayHelper.cacheAndDispatchClickEvent(
+                        val clickEvent = TimerOverlayHelper.cacheClickEvent(
                             context = applicationContext,
                             layoutName = layoutName,
                             content = pendingDisplayContent,
                         )
-                        FlutterLocalNotificationPluginsPlugin.bringHostAppToForegroundOrStart(
-                            applicationContext,
+                        val started = FlutterLocalNotificationPluginsPlugin.startTimerOverlayClickIntent(
+                            context = applicationContext,
+                            event = clickEvent,
                         )
                         stopSelf()
+                        if (!started) {
+                            TimerOverlayHelper.dispatchClickEvent(
+                                context = applicationContext,
+                                event = clickEvent,
+                            )
+                        }
                     } catch (e: Exception) {
                         Log.e(TAG, "overlay click failed", e)
                     }
