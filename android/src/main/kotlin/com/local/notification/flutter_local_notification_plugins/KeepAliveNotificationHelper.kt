@@ -764,6 +764,7 @@ object KeepAliveNotificationHelper {
                     .setSound(null)
                     .setVibrate(null)
                     .setAutoCancel(true)
+                    .setOngoing(true)
                     .setOnlyAlertOnce(false)
                     .setShowWhen(true)
                     .setWhen(System.currentTimeMillis())

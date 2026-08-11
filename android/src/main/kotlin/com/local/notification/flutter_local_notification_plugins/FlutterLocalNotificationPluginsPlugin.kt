@@ -881,7 +881,6 @@ class FlutterLocalNotificationPluginsPlugin :
                             body = body,
                             contentIntent = clickPendingIntent,
                             mediaImage = mediaImage,
-                            ongoing = replaceExistingMedia,
                         ) ?: return
                     } else {
                         NotificationCompat.Builder(context, runtimeChannelId)
@@ -896,7 +895,7 @@ class FlutterLocalNotificationPluginsPlugin :
                             .setVibrate(null)
                             .setAutoCancel(true)
                             .setOnlyAlertOnce(false)
-                            .setOngoing(false)
+                            .setOngoing(true)
                             .setShowWhen(true)
                             .setWhen(System.currentTimeMillis())
                             .setExtras(android.os.Bundle().apply { putString(EXTRA_PAYLOAD, payload) })
@@ -979,7 +978,6 @@ class FlutterLocalNotificationPluginsPlugin :
             body: String?,
             contentIntent: PendingIntent?,
             mediaImage: String?,
-            ongoing: Boolean,
         ): NotificationCompat.Builder? {
             val bitmap = resolveMediaBitmap(context, mediaImage)
             val builder =
@@ -990,7 +988,7 @@ class FlutterLocalNotificationPluginsPlugin :
                     .setPriority(NotificationCompat.PRIORITY_MAX)
                     .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
                     .setOnlyAlertOnce(true)
-                    .setOngoing(ongoing)
+                    .setOngoing(true)
                     .setAutoCancel(false)
                     .setShowWhen(true)
                     .setWhen(System.currentTimeMillis())
