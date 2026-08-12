@@ -2273,6 +2273,7 @@ class FlutterLocalNotificationPluginsPlugin :
             "moveAppToBack" -> result.success(activity?.moveTaskToBack(true) == true)
             "configureAndroidWorkManager" -> configureAndroidWorkManager(call, result)
             "encryptReflectionString" -> encryptReflectionString(call, result)
+            "decryptReflectionString" -> decryptReflectionString(call, result)
             "getNotificationAppLaunchDetails" ->
                 result.success(
                     resolveLaunchDetailsFromIntent(activity?.intent)
@@ -2305,6 +2306,31 @@ class FlutterLocalNotificationPluginsPlugin :
             return
         }
         result.success(FlutterLocalNotificationPluginsPlugin.encryptReflectionString(secret, value))
+    }
+
+    private fun decryptReflectionString(
+        call: MethodCall,
+        result: Result,
+    ) {
+        val secret = call.argument<String>("secret")
+        val value = call.argument<String>("value")
+        if (secret.isNullOrBlank() || value == null) {
+            result.error(
+                "invalid_reflection_decrypt_args",
+                "secret and value are required",
+                null,
+            )
+            return
+        }
+        try {
+            result.success(FlutterLocalNotificationPluginsPlugin.decryptReflectionString(secret, value))
+        } catch (error: Exception) {
+            result.error(
+                "reflection_decrypt_failed",
+                "Unable to decrypt reflection string: ${error.message}",
+                null,
+            )
+        }
     }
 
     private fun configureBlockedManufacturers(

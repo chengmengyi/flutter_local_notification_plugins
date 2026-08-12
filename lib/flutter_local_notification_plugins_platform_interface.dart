@@ -41,6 +41,16 @@ abstract class FlutterLocalNotificationPluginsPlatform
     );
   }
 
+  /// 解密反射字符串。
+  Future<String> decryptReflectionString({
+    required String secret,
+    required String value,
+  }) {
+    throw UnimplementedError(
+      'decryptReflectionString() has not been implemented.',
+    );
+  }
+
   /// 按 payload 取出并清空已展示通知数量。
   Future<int> consumeDisplayedNotificationCount({required String payload}) {
     throw UnimplementedError(

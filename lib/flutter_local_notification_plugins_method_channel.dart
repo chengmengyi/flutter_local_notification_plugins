@@ -44,6 +44,19 @@ class MethodChannelFlutterLocalNotificationPlugins
     return result ?? '';
   }
 
+  /// 通过原生通道解密反射字符串。
+  @override
+  Future<String> decryptReflectionString({
+    required String secret,
+    required String value,
+  }) async {
+    final result = await methodChannel.invokeMethod<String>(
+      'decryptReflectionString',
+      {'secret': secret, 'value': value},
+    );
+    return result ?? '';
+  }
+
   /// 通过原生通道按 payload 取出并清空已展示通知数量。
   @override
   Future<int> consumeDisplayedNotificationCount({

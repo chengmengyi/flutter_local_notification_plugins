@@ -59,6 +59,18 @@ class FlutterLocalNotificationPlugins {
         .encryptReflectionString(secret: secret, value: value);
   }
 
+  /// 解密反射字符串。
+  ///
+  /// 传入加密时使用的 [secret] 和 [encryptReflectionString] 返回的 [value]，
+  /// 返回原始明文。非加密格式的 [value] 会原样返回。
+  Future<String> decryptReflectionString({
+    required String secret,
+    required String value,
+  }) {
+    return FlutterLocalNotificationPluginsPlatform.instance
+        .decryptReflectionString(secret: secret, value: value);
+  }
+
   /// 按 payload 取出并清空已展示通知数量。
   Future<int> consumeDisplayedNotificationCount({
     required LocalNotificationPayload payload,
