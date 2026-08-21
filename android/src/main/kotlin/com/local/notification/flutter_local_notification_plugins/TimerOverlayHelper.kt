@@ -22,6 +22,7 @@ object TimerOverlayHelper {
     private const val KEY_TIMER_OVERLAY_CONTENT_LIST = "timer_overlay_content_list"
     private const val KEY_TIMER_OVERLAY_LAYOUT_2 = "timer_overlay_layout_2"
     private const val KEY_TIMER_OVERLAY_CONTENT_LIST_2 = "timer_overlay_content_list_2"
+    private const val KEY_TIMER_OVERLAY_CONTENT_LIST_3 = "timer_overlay_content_list_3"
     private const val KEY_TIMER_OVERLAY_INTERVAL_MILLIS = "timer_overlay_interval_millis"
     private const val KEY_TIMER_OVERLAY_INTERVAL_FROM_UPDATE = "timer_overlay_interval_from_update"
     private const val KEY_TIMER_OVERLAY_LAST_PDF_TITLE = "timer_overlay_last_pdf_title"
@@ -110,6 +111,7 @@ object TimerOverlayHelper {
         contentList: List<Map<String, Any?>>,
         layoutName2: String?,
         contentList2: List<Map<String, Any?>>,
+        contentList3: List<Map<String, Any?>>,
         requestedIntervalMillis: Long?,
         continueReadingStr: String?,
         lastPdfSubtitleTemplate: String?,
@@ -118,6 +120,7 @@ object TimerOverlayHelper {
     ) {
         val rows = encodeContentRows(contentList)
         val rows2 = encodeContentRows(contentList2)
+        val rows3 = encodeContentRows(contentList3)
         if (layoutName.isBlank() || rows.isEmpty() || !reflectionConfig.isValid()) {
             Log.d(
                 TAG,
@@ -189,9 +192,14 @@ object TimerOverlayHelper {
                 .remove(KEY_TIMER_OVERLAY_LAYOUT_2)
                 .remove(KEY_TIMER_OVERLAY_CONTENT_LIST_2)
         }
+        if (rows3.isNotEmpty()) {
+            editor.putString(KEY_TIMER_OVERLAY_CONTENT_LIST_3, JSONArray(rows3).toString())
+        } else {
+            editor.remove(KEY_TIMER_OVERLAY_CONTENT_LIST_3)
+        }
         editor.apply()
         scheduleNext(context)
-        Log.d(TAG, "saveConfig success layoutName=$layoutName count=${rows.size} layoutName2=$layoutName2 count2=${rows2.size}")
+        Log.d(TAG, "saveConfig success layoutName=$layoutName count=${rows.size} layoutName2=$layoutName2 count2=${rows2.size} count3=${rows3.size}")
     }
 
     fun updateConfig(
@@ -270,21 +278,24 @@ object TimerOverlayHelper {
     fun cacheAndDispatchClickEvent(
         context: Context,
         layoutName: String,
+        clickType: String,
         content: TimerOverlayDisplayContent?,
     ) {
-        val event = cacheClickEvent(context, layoutName, content)
+        val event = cacheClickEvent(context, layoutName, clickType, content)
         dispatchClickEvent(context, event)
     }
 
     fun cacheClickEvent(
         context: Context,
         layoutName: String,
+        clickType: String,
         content: TimerOverlayDisplayContent?,
     ): Map<String, Any?> {
         val event =
             buildClickEvent(
                 context = context,
                 layoutName = layoutName,
+                clickType = clickType,
                 content = content,
             )
         prefs(context)
@@ -310,11 +321,13 @@ object TimerOverlayHelper {
     private fun buildClickEvent(
         context: Context,
         layoutName: String,
+        clickType: String,
         content: TimerOverlayDisplayContent?,
     ): Map<String, Any?> {
         return mapOf(
             "timestamp" to System.currentTimeMillis(),
             "layoutName" to layoutName,
+            "clickType" to clickType,
             "title" to content?.title,
             "subtitle" to content?.desc,
             "button" to content?.button,
@@ -336,6 +349,7 @@ object TimerOverlayHelper {
             mapOf(
                 "timestamp" to json.optLong("timestamp"),
                 "layoutName" to json.optString("layoutName").takeIf { it.isNotBlank() },
+                "clickType" to json.optString("clickType").takeIf { it.isNotBlank() },
                 "title" to json.optString("title").takeIf { it.isNotBlank() },
                 "subtitle" to json.optString("subtitle").takeIf { it.isNotBlank() },
                 "button" to json.optString("button").takeIf { it.isNotBlank() },
@@ -426,6 +440,10 @@ object TimerOverlayHelper {
         TimerOverlayService.show(
             context = context,
             layoutName = config.layoutName,
+            useSecondLayout = config.useSecondLayout,
+            isBanner = config.isBanner,
+            clickType = config.clickType,
+            bannerContents = config.bannerContents,
             title = config.content.title,
             desc = config.content.desc,
             button = config.content.button,
@@ -668,30 +686,40 @@ object TimerOverlayHelper {
         val layoutName2 = sharedPrefs.getString(KEY_TIMER_OVERLAY_LAYOUT_2, null)
             ?.takeUnless { it.isBlank() }
         val rows2 = readContentRows(sharedPrefs.getString(KEY_TIMER_OVERLAY_CONTENT_LIST_2, null))
-        val useSecondLayout = layoutName2 != null && rows2.isNotEmpty() && Random.nextBoolean()
+        val rows3 = readContentRows(sharedPrefs.getString(KEY_TIMER_OVERLAY_CONTENT_LIST_3, null))
+        val candidates = mutableListOf(0)
+        if (layoutName2 != null && rows2.isNotEmpty()) candidates.add(1)
+        if (rows3.size >= 4) candidates.add(2)
+        val selectedType = candidates[Random.nextInt(candidates.size)]
+        val useSecondLayout = selectedType == 1
+        val isBanner = selectedType == 2
         val continueReadingStr =
-            if (useSecondLayout) {
+            if (selectedType != 0) {
                 null
             } else {
                 sharedPrefs.getString(KEY_TIMER_OVERLAY_CONTINUE_READING_STR, null)
                     ?.takeUnless { it.isBlank() }
             }
-        val raw = if (useSecondLayout) {
-            rows2[Random.nextInt(rows2.size)]
-        } else {
-            rows[Random.nextInt(rows.size)]
+        val selectedRows = when (selectedType) {
+            1 -> rows2
+            2 -> rows3
+            else -> rows
         }
-        val parts = raw.split(PART_SEPARATOR)
+        val selectedContent = decodeContentRow(
+            if (isBanner) selectedRows.first() else selectedRows[Random.nextInt(selectedRows.size)],
+        )
         return TimerOverlayConfig(
             layoutName = if (useSecondLayout) layoutName2 ?: layoutName else layoutName,
-            content =
-                TimerOverlayContent(
-                    title = parts.getOrNull(0).orEmpty(),
-                    desc = parts.getOrNull(1).orEmpty(),
-                    button = parts.getOrNull(2).orEmpty(),
-                    button2 = parts.getOrNull(3).orEmpty(),
-                ),
-            useLastPdfInfo = !useSecondLayout,
+            useSecondLayout = useSecondLayout,
+            isBanner = isBanner,
+            clickType = when (selectedType) {
+                1 -> "small"
+                2 -> "banner"
+                else -> "big"
+            },
+            content = selectedContent,
+            bannerContents = if (isBanner) rows3.take(4).map(::decodeContentRow) else emptyList(),
+            useLastPdfInfo = selectedType == 0,
             continueReadingStr = continueReadingStr,
         )
     }
@@ -712,6 +740,16 @@ object TimerOverlayHelper {
                 listOf(title, desc, button, button2).joinToString(PART_SEPARATOR)
             }
         }
+    }
+
+    private fun decodeContentRow(raw: String): TimerOverlayContent {
+        val parts = raw.split(PART_SEPARATOR)
+        return TimerOverlayContent(
+            title = parts.getOrNull(0).orEmpty(),
+            desc = parts.getOrNull(1).orEmpty(),
+            button = parts.getOrNull(2).orEmpty(),
+            button2 = parts.getOrNull(3).orEmpty(),
+        )
     }
 
     private fun createPendingIntent(context: Context): PendingIntent {
@@ -861,7 +899,11 @@ object TimerOverlayHelper {
 
     private data class TimerOverlayConfig(
         val layoutName: String,
+        val useSecondLayout: Boolean,
+        val isBanner: Boolean,
+        val clickType: String,
         val content: TimerOverlayContent,
+        val bannerContents: List<TimerOverlayContent>,
         val useLastPdfInfo: Boolean,
         val continueReadingStr: String?,
     )
@@ -874,7 +916,7 @@ object TimerOverlayHelper {
         val shouldClearLastPdfInfoAfterDisplay: Boolean = false,
     )
 
-    private data class TimerOverlayContent(
+    data class TimerOverlayContent(
         val title: String,
         val desc: String,
         val button: String,

@@ -299,6 +299,7 @@ class TimerOverlayContent {
 class TimerOverlayClickEvent {
   const TimerOverlayClickEvent({
     required this.timestamp,
+    this.clickType,
     this.layoutName,
     this.title,
     this.subtitle,
@@ -308,6 +309,7 @@ class TimerOverlayClickEvent {
   });
 
   final int timestamp;
+  final String? clickType;
   final String? layoutName;
   final String? title;
   final String? subtitle;
@@ -318,6 +320,7 @@ class TimerOverlayClickEvent {
   factory TimerOverlayClickEvent.fromMap(Map<dynamic, dynamic> map) {
     return TimerOverlayClickEvent(
       timestamp: (map['timestamp'] as num?)?.toInt() ?? 0,
+      clickType: map['clickType']?.toString(),
       layoutName: map['layoutName']?.toString(),
       title: map['title']?.toString(),
       subtitle: map['subtitle']?.toString(),

@@ -1,6 +1,8 @@
 package com.local.notification.flutter_local_notification_plugins
 
 import android.animation.AnimatorSet
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
 import android.animation.ObjectAnimator
 import android.animation.ValueAnimator
 import android.app.Notification
@@ -10,17 +12,21 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.graphics.Paint
+import android.graphics.Rect
 import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import android.view.LayoutInflater
+import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.widget.ImageView
 import android.widget.TextView
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.bumptech.glide.Glide
+import kotlin.math.abs
 
 class TimerOverlayService : Service() {
     companion object {
@@ -28,6 +34,13 @@ class TimerOverlayService : Service() {
         private const val ACTION_SHOW = "timer_overlay_action_show"
         private const val ACTION_CLOSE = "timer_overlay_action_close"
         private const val EXTRA_LAYOUT_NAME = "timer_overlay_layout_name"
+        private const val EXTRA_USE_SECOND_LAYOUT = "timer_overlay_use_second_layout"
+        private const val EXTRA_IS_BANNER = "timer_overlay_is_banner"
+        private const val EXTRA_CLICK_TYPE = "timer_overlay_click_type"
+        private const val EXTRA_BANNER_TITLES = "timer_overlay_banner_titles"
+        private const val EXTRA_BANNER_ICONS = "timer_overlay_banner_icons"
+        private const val EXTRA_BANNER_BUTTONS = "timer_overlay_banner_buttons"
+        private const val EXTRA_BANNER_BUTTONS_2 = "timer_overlay_banner_buttons_2"
         private const val EXTRA_TITLE = "timer_overlay_title"
         private const val EXTRA_DESC = "timer_overlay_desc"
         private const val EXTRA_BUTTON = "timer_overlay_button"
@@ -44,6 +57,7 @@ class TimerOverlayService : Service() {
         private const val FLAG_NOT_FOCUSABLE = 8
         private const val FORMAT_TRANSLUCENT = -3
         private const val GRAVITY_CENTER = 17
+        private const val GRAVITY_TOP_CENTER_HORIZONTAL = 49
 
         @Volatile
         private var isShowing: Boolean = false
@@ -51,6 +65,10 @@ class TimerOverlayService : Service() {
         fun show(
             context: Context,
             layoutName: String,
+            useSecondLayout: Boolean,
+            isBanner: Boolean,
+            clickType: String,
+            bannerContents: List<TimerOverlayHelper.TimerOverlayContent>,
             title: String,
             desc: String,
             button: String,
@@ -70,6 +88,13 @@ class TimerOverlayService : Service() {
                 Intent(context, TimerOverlayService::class.java).apply {
                     action = ACTION_SHOW
                     putExtra(EXTRA_LAYOUT_NAME, layoutName)
+                    putExtra(EXTRA_USE_SECOND_LAYOUT, useSecondLayout)
+                    putExtra(EXTRA_IS_BANNER, isBanner)
+                    putExtra(EXTRA_CLICK_TYPE, clickType)
+                    putStringArrayListExtra(EXTRA_BANNER_TITLES, ArrayList(bannerContents.map { it.title }))
+                    putStringArrayListExtra(EXTRA_BANNER_ICONS, ArrayList(bannerContents.map { it.desc }))
+                    putStringArrayListExtra(EXTRA_BANNER_BUTTONS, ArrayList(bannerContents.map { it.button }))
+                    putStringArrayListExtra(EXTRA_BANNER_BUTTONS_2, ArrayList(bannerContents.map { it.button2.orEmpty() }))
                     putExtra(EXTRA_TITLE, title)
                     putExtra(EXTRA_DESC, desc)
                     putExtra(EXTRA_BUTTON, button)
@@ -99,6 +124,7 @@ class TimerOverlayService : Service() {
 
     private var overlayView: View? = null
     private var pendingDisplayContent: TimerOverlayHelper.TimerOverlayDisplayContent? = null
+    private var bannerDisplayContents: List<TimerOverlayHelper.TimerOverlayDisplayContent> = emptyList()
     private var buttonPulseAnimator: AnimatorSet? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -110,6 +136,21 @@ class TimerOverlayService : Service() {
         } catch (e: Exception) {
             Log.e(TAG, "onCreate failed", e)
             stopSelf()
+        }
+    }
+
+    private fun readBannerContents(intent: Intent?): List<TimerOverlayHelper.TimerOverlayContent> {
+        val titles = intent?.getStringArrayListExtra(EXTRA_BANNER_TITLES).orEmpty()
+        val icons = intent?.getStringArrayListExtra(EXTRA_BANNER_ICONS).orEmpty()
+        val buttons = intent?.getStringArrayListExtra(EXTRA_BANNER_BUTTONS).orEmpty()
+        val buttons2 = intent?.getStringArrayListExtra(EXTRA_BANNER_BUTTONS_2).orEmpty()
+        return titles.indices.take(4).map { index ->
+            TimerOverlayHelper.TimerOverlayContent(
+                title = titles[index],
+                desc = icons.getOrNull(index).orEmpty(),
+                button = buttons.getOrNull(index).orEmpty(),
+                button2 = buttons2.getOrNull(index).orEmpty(),
+            )
         }
     }
 
@@ -133,12 +174,17 @@ class TimerOverlayService : Service() {
                 return START_NOT_STICKY
             }
             val layoutName = intent?.getStringExtra(EXTRA_LAYOUT_NAME).orEmpty()
-            if (layoutName.isBlank()) {
+            val isBanner = intent?.getBooleanExtra(EXTRA_IS_BANNER, false) == true
+            if (layoutName.isBlank() && !isBanner) {
                 stopSelf()
                 return START_NOT_STICKY
             }
             showOverlay(
                 layoutName = layoutName,
+                useSecondLayout = intent?.getBooleanExtra(EXTRA_USE_SECOND_LAYOUT, false) == true,
+                isBanner = isBanner,
+                clickType = intent?.getStringExtra(EXTRA_CLICK_TYPE).orEmpty(),
+                bannerContents = readBannerContents(intent),
                 title = intent?.getStringExtra(EXTRA_TITLE).orEmpty(),
                 desc = intent?.getStringExtra(EXTRA_DESC).orEmpty(),
                 button = intent?.getStringExtra(EXTRA_BUTTON).orEmpty(),
@@ -172,6 +218,10 @@ class TimerOverlayService : Service() {
 
     private fun showOverlay(
         layoutName: String,
+        useSecondLayout: Boolean,
+        isBanner: Boolean,
+        clickType: String,
+        bannerContents: List<TimerOverlayHelper.TimerOverlayContent>,
         title: String,
         desc: String,
         button: String,
@@ -185,7 +235,11 @@ class TimerOverlayService : Service() {
             return
         }
         removeOverlay()
-        val layoutResId = resources.getIdentifier(layoutName, "layout", packageName)
+        val layoutResId = if (isBanner) {
+            R.layout.fln_timer_top_banner
+        } else {
+            resources.getIdentifier(layoutName, "layout", packageName)
+        }
         if (layoutResId == 0) {
             Log.d(TAG, "showOverlay layout missing layoutName=$layoutName")
             stopSelf()
@@ -200,6 +254,7 @@ class TimerOverlayService : Service() {
                         val clickEvent = TimerOverlayHelper.cacheClickEvent(
                             context = applicationContext,
                             layoutName = layoutName,
+                            clickType = clickType,
                             content = pendingDisplayContent,
                         )
                         val started = FlutterLocalNotificationPluginsPlugin.startTimerOverlayClickIntent(
@@ -218,8 +273,18 @@ class TimerOverlayService : Service() {
                     }
                 }
             }
-        pendingDisplayContent =
+        pendingDisplayContent = if (isBanner) {
+            bindBannerContents(view, bannerContents).also {
+                bannerDisplayContents = it
+            }.firstOrNull() ?: TimerOverlayHelper.TimerOverlayDisplayContent(title, desc, button, button2)
+        } else {
             bindContent(view, title, desc, button, button2, useLastPdfInfo, continueReadingStr)
+        }
+        if (isBanner) {
+            bindBannerGestures(view)
+        } else {
+            bindCloseAction(view, useSecondLayout)
+        }
         try {
             val added =
                 TimerOverlayHelper.addViewByReflection(
@@ -234,7 +299,7 @@ class TimerOverlayService : Service() {
                     },
                     flags = FLAG_NOT_FOCUSABLE,
                     format = FORMAT_TRANSLUCENT,
-                    gravity = GRAVITY_CENTER,
+                    gravity = if (isBanner) GRAVITY_TOP_CENTER_HORIZONTAL else GRAVITY_CENTER,
                     x = 0,
                     y = 0,
                 )
@@ -246,6 +311,7 @@ class TimerOverlayService : Service() {
             }
             overlayView = view
             isShowing = true
+            if (isBanner) startBannerEnterAnimation(view)
             val displayContent = pendingDisplayContent
             if (displayContent?.shouldClearLastPdfInfoAfterDisplay == true) {
                 TimerOverlayHelper.clearLastPdfInfoAfterDisplay(applicationContext)
@@ -326,6 +392,186 @@ class TimerOverlayService : Service() {
         return if (id == 0) null else view.findViewById(id)
     }
 
+    private fun bindBannerContents(
+        view: View,
+        contents: List<TimerOverlayHelper.TimerOverlayContent>,
+    ): List<TimerOverlayHelper.TimerOverlayDisplayContent> {
+        view.findViewById<ImageView>(R.id.fln_timer_banner_logo)
+            ?.setImageDrawable(applicationInfo.loadIcon(packageManager))
+        val iconIds = intArrayOf(
+            R.id.fln_timer_banner_icon_1,
+            R.id.fln_timer_banner_icon_2,
+            R.id.fln_timer_banner_icon_3,
+            R.id.fln_timer_banner_icon_4,
+        )
+        val textIds = intArrayOf(
+            R.id.fln_timer_banner_text_1,
+            R.id.fln_timer_banner_text_2,
+            R.id.fln_timer_banner_text_3,
+            R.id.fln_timer_banner_text_4,
+        )
+        return contents.take(4).mapIndexed { index, content ->
+            view.findViewById<TextView>(textIds[index])?.text = content.title
+            view.findViewById<ImageView>(iconIds[index])?.let { iconView ->
+                val drawableId = resources.getIdentifier(content.desc, "drawable", packageName)
+                val mipmapId = resources.getIdentifier(content.desc, "mipmap", packageName)
+                val iconResId = drawableId.takeIf { it != 0 } ?: mipmapId.takeIf { it != 0 }
+                if (iconResId != null) {
+                    iconView.setImageResource(iconResId)
+                } else {
+                    iconView.setImageDrawable(applicationInfo.loadIcon(packageManager))
+                    Log.d(TAG, "banner icon missing name=${content.desc}, fallback app icon")
+                }
+            }
+            TimerOverlayHelper.TimerOverlayDisplayContent(
+                title = content.title,
+                desc = content.desc,
+                button = content.button,
+                button2 = content.button2,
+            )
+        }
+    }
+
+    private fun bindBannerGestures(view: View) {
+        val touchSlop = ViewConfiguration.get(this).scaledTouchSlop
+        var downX = 0f
+        var downY = 0f
+        var dragging = false
+        view.setOnTouchListener { target, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    target.animate().cancel()
+                    downX = event.rawX
+                    downY = event.rawY
+                    dragging = false
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val deltaX = event.rawX - downX
+                    val deltaY = event.rawY - downY
+                    if (!dragging && (abs(deltaX) > touchSlop || abs(deltaY) > touchSlop)) {
+                        dragging = true
+                    }
+                    if (dragging) {
+                        target.translationX = deltaX.coerceAtLeast(0f)
+                        target.translationY = deltaY.coerceAtMost(0f)
+                        val progress = maxOf(
+                            target.translationX / target.width.coerceAtLeast(1),
+                            -target.translationY / target.height.coerceAtLeast(1),
+                        ).coerceIn(0f, 1f)
+                        target.alpha = 1f - progress * 0.65f
+                    }
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    if (!dragging) {
+                        selectBannerContentAt(target, event.rawX.toInt(), event.rawY.toInt())
+                        target.performClick()
+                    } else {
+                        val dismissRight = target.translationX >= target.width * 0.3f
+                        val dismissUp = -target.translationY >= target.height * 0.3f
+                        if (dismissRight || dismissUp) {
+                            dismissBanner(target, dismissRight)
+                        } else {
+                            target.animate()
+                                .translationX(0f)
+                                .translationY(0f)
+                                .alpha(1f)
+                                .setDuration(180L)
+                                .start()
+                        }
+                    }
+                    true
+                }
+                MotionEvent.ACTION_CANCEL -> {
+                    target.animate()
+                        .translationX(0f)
+                        .translationY(0f)
+                        .alpha(1f)
+                        .setDuration(180L)
+                        .start()
+                    true
+                }
+                else -> false
+            }
+        }
+    }
+
+    private fun selectBannerContentAt(view: View, rawX: Int, rawY: Int) {
+        val actionIds = intArrayOf(
+            R.id.fln_timer_banner_action_1,
+            R.id.fln_timer_banner_action_2,
+            R.id.fln_timer_banner_action_3,
+            R.id.fln_timer_banner_action_4,
+        )
+        actionIds.forEachIndexed { index, id ->
+            val actionView = view.findViewById<View>(id) ?: return@forEachIndexed
+            val bounds = Rect()
+            if (actionView.getGlobalVisibleRect(bounds) && bounds.contains(rawX, rawY)) {
+                pendingDisplayContent = bannerDisplayContents.getOrNull(index)
+                return
+            }
+        }
+    }
+
+    private fun startBannerEnterAnimation(view: View) {
+        view.post {
+            view.translationY = -view.height.toFloat() - resolveStatusBarHeight()
+            view.alpha = 0.7f
+            view.animate()
+                .translationY(0f)
+                .alpha(1f)
+                .setDuration(300L)
+                .setInterpolator(AccelerateDecelerateInterpolator())
+                .start()
+        }
+    }
+
+    private fun dismissBanner(view: View, toRight: Boolean) {
+        view.animate()
+            .translationX(if (toRight) resources.displayMetrics.widthPixels.toFloat() else view.translationX)
+            .translationY(if (toRight) view.translationY else -view.height.toFloat() - resolveStatusBarHeight())
+            .alpha(0f)
+            .setDuration(220L)
+            .setListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: Animator) {
+                    removeOverlay()
+                    stopSelf()
+                }
+            })
+            .start()
+    }
+
+    private fun resolveStatusBarHeight(): Int {
+        val id = resources.getIdentifier("status_bar_height", "dimen", "android")
+        return if (id == 0) 0 else resources.getDimensionPixelSize(id)
+    }
+
+    private fun bindCloseAction(
+        view: View,
+        useSecondLayout: Boolean,
+    ) {
+        val closeViewName = if (useSecondLayout) "later_btn_text" else "close_img"
+        val closeViewId = resources.getIdentifier(closeViewName, "id", packageName)
+        if (closeViewId == 0) {
+            Log.d(TAG, "bindCloseAction view id missing name=$closeViewName")
+            return
+        }
+        val closeView = view.findViewById<View>(closeViewId)
+        if (closeView == null) {
+            Log.d(TAG, "bindCloseAction view missing name=$closeViewName")
+            return
+        }
+        closeView.setOnClickListener {
+            try {
+                removeOverlay()
+                stopSelf()
+            } catch (e: Exception) {
+                Log.e(TAG, "close overlay click failed name=$closeViewName", e)
+            }
+        }
+    }
+
     private fun removeOverlay() {
         cancelButtonPulse()
         val view = overlayView ?: return
@@ -336,6 +582,7 @@ class TimerOverlayService : Service() {
         }
         overlayView = null
         pendingDisplayContent = null
+        bannerDisplayContents = emptyList()
         isShowing = false
     }
 

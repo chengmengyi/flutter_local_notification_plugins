@@ -133,6 +133,7 @@ abstract class FlutterLocalNotificationPluginsPlatform
     required List<Map<String, Object?>> contentList,
     String? layoutName2,
     List<Map<String, Object?>>? contentList2,
+    List<Map<String, Object?>>? contentList3,
     required String continueReadingStr,
     required String lastPdfSubtitleTemplate,
     required String lastPdfButtonText,

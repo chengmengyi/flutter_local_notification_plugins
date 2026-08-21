@@ -150,6 +150,8 @@ class FlutterLocalNotificationPluginsPlugin :
             "flutter_local_notification_timer_overlay_timestamp"
         private const val EXTRA_TIMER_OVERLAY_LAYOUT_NAME =
             "flutter_local_notification_timer_overlay_layout_name"
+        private const val EXTRA_TIMER_OVERLAY_CLICK_TYPE =
+            "flutter_local_notification_timer_overlay_click_type"
         private const val EXTRA_TIMER_OVERLAY_SUBTITLE =
             "flutter_local_notification_timer_overlay_subtitle"
         private const val EXTRA_TIMER_OVERLAY_BUTTON =
@@ -480,6 +482,7 @@ class FlutterLocalNotificationPluginsPlugin :
                     event["timestamp"]?.toString()?.toLongOrNull() ?: System.currentTimeMillis(),
                 )
                 putExtra(EXTRA_TIMER_OVERLAY_LAYOUT_NAME, event["layoutName"]?.toString())
+                putExtra(EXTRA_TIMER_OVERLAY_CLICK_TYPE, event["clickType"]?.toString())
                 putExtra(EXTRA_TITLE, event["title"]?.toString())
                 putExtra(EXTRA_TIMER_OVERLAY_SUBTITLE, event["subtitle"]?.toString())
                 putExtra(EXTRA_TIMER_OVERLAY_BUTTON, event["button"]?.toString())
@@ -1521,6 +1524,7 @@ class FlutterLocalNotificationPluginsPlugin :
             return mapOf(
                 "timestamp" to intent.getLongExtra(EXTRA_TIMER_OVERLAY_TIMESTAMP, 0L),
                 "layoutName" to intent.getStringExtra(EXTRA_TIMER_OVERLAY_LAYOUT_NAME),
+                "clickType" to intent.getStringExtra(EXTRA_TIMER_OVERLAY_CLICK_TYPE),
                 "title" to intent.getStringExtra(EXTRA_TITLE),
                 "subtitle" to intent.getStringExtra(EXTRA_TIMER_OVERLAY_SUBTITLE),
                 "button" to intent.getStringExtra(EXTRA_TIMER_OVERLAY_BUTTON),
@@ -2550,6 +2554,7 @@ class FlutterLocalNotificationPluginsPlugin :
         val contentList = call.argument<List<Map<String, Any?>>>("contentList") ?: emptyList()
         val layoutName2 = call.argument<String>("layoutName2")?.trim()
         val contentList2 = call.argument<List<Map<String, Any?>>>("contentList2") ?: emptyList()
+        val contentList3 = call.argument<List<Map<String, Any?>>>("contentList3") ?: emptyList()
         val requestedIntervalMillis =
             call.argument<Number>("timerIntervalMilliseconds")?.toLong()
         val continueReadingStr =
@@ -2576,6 +2581,7 @@ class FlutterLocalNotificationPluginsPlugin :
             contentList = contentList,
             layoutName2 = layoutName2,
             contentList2 = contentList2,
+            contentList3 = contentList3,
             requestedIntervalMillis = requestedIntervalMillis,
             continueReadingStr = continueReadingStr,
             lastPdfSubtitleTemplate = lastPdfSubtitleTemplate,
