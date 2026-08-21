@@ -535,6 +535,8 @@ class TimerOverlayService : Service() {
             .setDuration(220L)
             .setListener(object : AnimatorListenerAdapter() {
                 override fun onAnimationEnd(animation: Animator) {
+                    view.visibility = View.INVISIBLE
+                    view.animate().setListener(null)
                     removeOverlay()
                     stopSelf()
                 }
