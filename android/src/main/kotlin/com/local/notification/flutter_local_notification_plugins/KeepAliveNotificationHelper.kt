@@ -708,6 +708,10 @@ object KeepAliveNotificationHelper {
         val title = parts.getOrNull(0)
         val body = parts.getOrNull(1)
         val payload = PAYLOAD_LOCAL
+        if (!FlutterLocalNotificationPluginsPlugin.tryAcquireGlobalNotificationWindow("$payload:$source")) {
+            Log.d(TAG, "showStoredLocalNotification skipped by global cooldown source=$source")
+            return false
+        }
         try {
             prepareForDynamicNotification(
                 context = context,

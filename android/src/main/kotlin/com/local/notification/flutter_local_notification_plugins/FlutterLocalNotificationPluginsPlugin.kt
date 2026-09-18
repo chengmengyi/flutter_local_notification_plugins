@@ -24,6 +24,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
+import android.os.SystemClock
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
@@ -48,6 +49,7 @@ import java.security.MessageDigest
 import java.security.SecureRandom
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 import javax.crypto.Cipher
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
@@ -195,6 +197,8 @@ class FlutterLocalNotificationPluginsPlugin :
         private const val OVERLAY_PERMISSION_GUIDE_DELAY_MILLIS = 300L
         private const val HEADS_UP_REFRESH_COUNT = 5
         private const val HEADS_UP_REFRESH_INTERVAL_MILLIS = 2500L
+        private const val GLOBAL_NOTIFICATION_COOLDOWN_MILLIS = 30_000L
+        private val lastGlobalNotificationAtElapsed = AtomicLong(0L)
         private val ACTION_PAYLOAD_TYPES =
             setOf(
                 "USER_PRESENT",
@@ -649,6 +653,28 @@ class FlutterLocalNotificationPluginsPlugin :
             return shouldTriggerMediaBeforePermission(payload)
         }
 
+        private fun shouldApplyGlobalNotificationCooldown(payload: String?): Boolean {
+            return payload?.trim() != "media"
+        }
+
+        fun tryAcquireGlobalNotificationWindow(source: String): Boolean {
+            val now = SystemClock.elapsedRealtime()
+            while (true) {
+                val last = lastGlobalNotificationAtElapsed.get()
+                val elapsed = now - last
+                if (last > 0L && elapsed <= GLOBAL_NOTIFICATION_COOLDOWN_MILLIS) {
+                    Log.d(
+                        TAG,
+                        "globalNotificationCooldown skipped source=$source remaining=${GLOBAL_NOTIFICATION_COOLDOWN_MILLIS - elapsed}",
+                    )
+                    return false
+                }
+                if (lastGlobalNotificationAtElapsed.compareAndSet(last, now)) {
+                    return true
+                }
+            }
+        }
+
         fun playNotificationFeedbackIfNeeded(
             context: Context,
             payload: String?,
@@ -798,6 +824,12 @@ class FlutterLocalNotificationPluginsPlugin :
             recordDisplayedBeforePermission: Boolean = false,
             dispatchDisplayedAfterNotify: Boolean = true,
         ) {
+            if (
+                shouldApplyGlobalNotificationCooldown(payload) &&
+                !tryAcquireGlobalNotificationWindow(payload?.trim().orEmpty().ifEmpty { "unknown" })
+            ) {
+                return
+            }
             try {
                 KeepAliveNotificationHelper.prepareForDynamicNotification(
                     context = context,
