@@ -55,6 +55,9 @@
       android:name=".TimerOverlayReceiver"
       android:exported="false" />
     <receiver
+      android:name=".NotificationRefreshReceiver"
+      android:exported="false" />
+    <receiver
       android:name=".BootCompletedReceiver"
       android:directBootAware="true"
       android:exported="true">

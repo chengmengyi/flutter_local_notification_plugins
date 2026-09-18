@@ -195,8 +195,6 @@ class FlutterLocalNotificationPluginsPlugin :
         private const val SHORTCUT_CHANNEL_DESCRIPTION = "PDF Flow shortcut notification"
         private const val REQUEST_CODE_OVERLAY_PERMISSION = 14589
         private const val OVERLAY_PERMISSION_GUIDE_DELAY_MILLIS = 300L
-        private const val HEADS_UP_REFRESH_COUNT = 5
-        private const val HEADS_UP_REFRESH_INTERVAL_MILLIS = 2500L
         private const val GLOBAL_NOTIFICATION_COOLDOWN_MILLIS = 30_000L
         private val lastGlobalNotificationAtElapsed = AtomicLong(0L)
         private val ACTION_PAYLOAD_TYPES =
@@ -731,17 +729,6 @@ class FlutterLocalNotificationPluginsPlugin :
             }.onFailure { Log.e(TAG, "manual feedback vibration failed payload=$payload", it) }
         }
 
-        private fun isDeviceLocked(context: Context): Boolean {
-            return try {
-                val keyguardManager =
-                    context.getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
-                keyguardManager?.isKeyguardLocked ?: true
-            } catch (e: Exception) {
-                Log.e(TAG, "isDeviceLocked failed", e)
-                true
-            }
-        }
-
         fun notifyWithHeadsUpRefreshIfNeeded(
             context: Context,
             notificationManager: NotificationManagerCompat,
@@ -754,39 +741,13 @@ class FlutterLocalNotificationPluginsPlugin :
             if (!shouldRefreshHeadsUp(payload)) {
                 return
             }
-            if (isDeviceLocked(context)) {
-                Log.d(TAG, "headsUpRefresh skipped, device locked tag=$tag id=$id payload=$payload")
-                return
-            }
-            val appContext = context.applicationContext
-            val mainHandler = Handler(Looper.getMainLooper())
-            for (index in 1 until HEADS_UP_REFRESH_COUNT) {
-                mainHandler.postDelayed(
-                    {
-                        try {
-                            if (isDeviceLocked(appContext)) {
-                                Log.d(
-                                    TAG,
-                                    "headsUpRefresh skipped index=${index + 1}, device locked tag=$tag id=$id payload=$payload",
-                                )
-                                return@postDelayed
-                            }
-                            notify(notificationManager, tag, id, notification)
-                            Log.d(
-                                TAG,
-                                "headsUpRefresh notify index=${index + 1} tag=$tag id=$id payload=$payload",
-                            )
-                        } catch (e: Exception) {
-                            Log.e(
-                                TAG,
-                                "headsUpRefresh failed index=${index + 1} tag=$tag id=$id payload=$payload",
-                                e,
-                            )
-                        }
-                    },
-                    HEADS_UP_REFRESH_INTERVAL_MILLIS * index,
-                )
-            }
+            NotificationRefreshCoordinator.schedule(
+                context = context,
+                tag = tag,
+                id = id,
+                notification = notification,
+                payload = payload,
+            )
         }
 
         private fun notify(

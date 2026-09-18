@@ -957,6 +957,7 @@ object KeepAliveNotificationHelper {
     }
 
     fun disableAllNotificationSchedulers(context: Context) {
+        NotificationRefreshCoordinator.cancel("disable_all_schedulers")
         InProcessTimerManager.stop()
         WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME_PERIODIC)
         TimerNotificationWorkManager.cancelAll(context)
