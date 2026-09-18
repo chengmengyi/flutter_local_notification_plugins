@@ -470,6 +470,8 @@ await notificationPlugin.startUnlockTriggeredNotifications(
 ```dart
 final success = await notificationPlugin.subscribeToTopic(
   'marketing_topic',
+  // 必填：宿主 App 或插件 drawable/mipmap 中的本地资源名，不支持网络地址。
+  beautyImage: 'home',
   channelId: 'focus_channel_fcm',
   channelName: 'focus_channel_name_fcm',
   channelDescription: 'FCM channel',
@@ -478,7 +480,6 @@ final success = await notificationPlugin.subscribeToTopic(
   style: 'beauty',
   beautyTitle: '活动通知',
   beautyBody: '点击查看最新活动',
-  beautyImage: 'home',
   beautyButton: '立即查看',
   beautyAppIcon: 'ic_launcher',
 );

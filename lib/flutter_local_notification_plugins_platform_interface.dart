@@ -250,6 +250,7 @@ abstract class FlutterLocalNotificationPluginsPlatform
   /// 订阅 FCM 主题并保存通知样式配置。
   Future<bool> subscribeToTopic({
     required String topic,
+    required String beautyImage,
     required String channelId,
     required String channelName,
     String? channelDescription,
@@ -258,7 +259,6 @@ abstract class FlutterLocalNotificationPluginsPlatform
     String? style,
     String? beautyTitle,
     String? beautyBody,
-    String? beautyImage,
     String? beautyButton,
     String? beautyAppIcon,
   }) {

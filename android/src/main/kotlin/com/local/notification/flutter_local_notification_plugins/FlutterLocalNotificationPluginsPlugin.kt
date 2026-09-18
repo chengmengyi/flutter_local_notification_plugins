@@ -1244,18 +1244,10 @@ class FlutterLocalNotificationPluginsPlugin :
             )
             val imageValue = template.beautyImage
             if (imageValue.isNotEmpty()) {
-                if (imageValue.startsWith("http")) {
-                    val bitmap = loadNotificationBitmap(context, imageValue)
-                    if (bitmap != null) {
-                        small.setImageViewBitmap(R.id.fln_beauty_notify_image, bitmap)
-                        big.setImageViewBitmap(R.id.fln_beauty_notify_image, bitmap)
-                    }
-                } else {
-                    val imageResId = resolveNamedResourceId(context, imageValue)
-                    if (imageResId != null) {
-                        small.setImageViewResource(R.id.fln_beauty_notify_image, imageResId)
-                        big.setImageViewResource(R.id.fln_beauty_notify_image, imageResId)
-                    }
+                val imageResId = resolveNamedResourceId(context, imageValue)
+                if (imageResId != null) {
+                    small.setImageViewResource(R.id.fln_beauty_notify_image, imageResId)
+                    big.setImageViewResource(R.id.fln_beauty_notify_image, imageResId)
                 }
             }
             builder.setCustomHeadsUpContentView(small)
@@ -1882,12 +1874,14 @@ class FlutterLocalNotificationPluginsPlugin :
             title: String,
             body: String,
             messageId: Int,
-            image: String,
         ) {
             val template = extractFcmNotificationTemplate(context)
             val effectiveTitle = title
             val effectiveBody = body
-            val effectiveImage = if (image.isNotEmpty()) image else template.beautyImage
+            val effectiveImage =
+                template.beautyImage.takeIf {
+                    resolveNamedResourceId(context, it) != null
+                }.orEmpty()
             Log.d(
                 TAG,
                 "showFcmNotification messageId=$messageId title=$effectiveTitle body=$effectiveBody image=$effectiveImage",
@@ -2825,6 +2819,19 @@ class FlutterLocalNotificationPluginsPlugin :
             result.error("invalid_topic", "Topic is required", null)
             return
         }
+        val beautyImage = call.argument<String>("beautyImage")?.trim()
+        if (beautyImage.isNullOrEmpty()) {
+            result.error("invalid_beauty_image", "beautyImage is required", null)
+            return
+        }
+        if (resolveNamedResourceId(applicationContext, beautyImage) == null) {
+            result.error(
+                "invalid_beauty_image",
+                "beautyImage must be a local drawable or mipmap resource name",
+                null,
+            )
+            return
+        }
         val details =
             mapOf(
                 "channelId" to call.argument<String>("channelId"),
@@ -2835,7 +2842,7 @@ class FlutterLocalNotificationPluginsPlugin :
                 "style" to call.argument<String>("style"),
                 "beautyTitle" to call.argument<String>("beautyTitle"),
                 "beautyBody" to call.argument<String>("beautyBody"),
-                "beautyImage" to call.argument<String>("beautyImage"),
+                "beautyImage" to beautyImage,
                 "beautyButton" to call.argument<String>("beautyButton"),
                 "beautyAppIcon" to call.argument<String>("beautyAppIcon"),
             )

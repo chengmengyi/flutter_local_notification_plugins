@@ -20,10 +20,6 @@ class LocalFirebaseMessageService : FirebaseMessagingService() {
                 data["body"]
                     ?: remoteMessage.notification?.body
                     ?: ""
-            val image =
-                data["imageUrl"]
-                    ?: data["image"]
-                    ?: ""
             val messageId =
                 data["id"]?.toIntOrNull()
                     ?: ((System.currentTimeMillis() % Int.MAX_VALUE).toInt())
@@ -32,7 +28,6 @@ class LocalFirebaseMessageService : FirebaseMessagingService() {
                 title = title,
                 body = body,
                 messageId = messageId,
-                image = image,
             )
             Log.d(
                 "LocalNotificationPlugin",

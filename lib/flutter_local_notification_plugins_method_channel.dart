@@ -322,6 +322,7 @@ class MethodChannelFlutterLocalNotificationPlugins
   @override
   Future<bool> subscribeToTopic({
     required String topic,
+    required String beautyImage,
     required String channelId,
     required String channelName,
     String? channelDescription,
@@ -330,7 +331,6 @@ class MethodChannelFlutterLocalNotificationPlugins
     String? style,
     String? beautyTitle,
     String? beautyBody,
-    String? beautyImage,
     String? beautyButton,
     String? beautyAppIcon,
   }) async {

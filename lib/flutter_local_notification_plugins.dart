@@ -341,8 +341,9 @@ class FlutterLocalNotificationPlugins {
   }
 
   /// 订阅 FCM 主题并保存通知样式配置。
-  Future<bool> subscribeToTopic(
-    String topic, {
+  Future<bool> subscribeToTopic({
+    required String topic,
+    required String beautyImage,
     String channelId = 'focus_channel_fcm',
     String channelName = 'focus_channel_name_fcm',
     String? channelDescription,
@@ -351,7 +352,6 @@ class FlutterLocalNotificationPlugins {
     String? style,
     String? beautyTitle,
     String? beautyBody,
-    String? beautyImage,
     String? beautyButton,
     String? beautyAppIcon,
   }) {
