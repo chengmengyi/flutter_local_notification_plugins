@@ -23,6 +23,8 @@ object TimerOverlayHelper {
     private const val KEY_TIMER_OVERLAY_LAYOUT_2 = "timer_overlay_layout_2"
     private const val KEY_TIMER_OVERLAY_CONTENT_LIST_2 = "timer_overlay_content_list_2"
     private const val KEY_TIMER_OVERLAY_CONTENT_LIST_3 = "timer_overlay_content_list_3"
+    private const val KEY_TIMER_OVERLAY_CLOSE_PROBABILITY =
+        "timer_overlay_close_probability"
     private const val KEY_TIMER_OVERLAY_INTERVAL_MILLIS = "timer_overlay_interval_millis"
     private const val KEY_TIMER_OVERLAY_INTERVAL_FROM_UPDATE = "timer_overlay_interval_from_update"
     private const val KEY_TIMER_OVERLAY_LAST_PDF_TITLE = "timer_overlay_last_pdf_title"
@@ -112,6 +114,7 @@ object TimerOverlayHelper {
         layoutName2: String?,
         contentList2: List<Map<String, Any?>>,
         contentList3: List<Map<String, Any?>>,
+        closeOverlayProbability: Int,
         requestedIntervalMillis: Long?,
         continueReadingStr: String?,
         lastPdfSubtitleTemplate: String?,
@@ -133,6 +136,10 @@ object TimerOverlayHelper {
             .edit()
             .putString(KEY_TIMER_OVERLAY_LAYOUT, layoutName)
             .putString(KEY_TIMER_OVERLAY_CONTENT_LIST, JSONArray(rows).toString())
+            .putInt(
+                KEY_TIMER_OVERLAY_CLOSE_PROBABILITY,
+                closeOverlayProbability.coerceIn(0, 100),
+            )
             .putString(
                 KEY_TIMER_OVERLAY_CONTINUE_READING_STR,
                 continueReadingStr?.trim().orEmpty(),
@@ -200,6 +207,23 @@ object TimerOverlayHelper {
         editor.apply()
         scheduleNext(context)
         Log.d(TAG, "saveConfig success layoutName=$layoutName count=${rows.size} layoutName2=$layoutName2 count2=${rows2.size} count3=${rows3.size}")
+    }
+
+    fun updateCloseOverlayProbability(
+        context: Context,
+        closeOverlayProbability: Int,
+    ) {
+        prefs(context)
+            .edit()
+            .putInt(
+                KEY_TIMER_OVERLAY_CLOSE_PROBABILITY,
+                closeOverlayProbability.coerceIn(0, 100),
+            )
+            .apply()
+        Log.d(
+            TAG,
+            "updateCloseOverlayProbability value=${closeOverlayProbability.coerceIn(0, 100)}",
+        )
     }
 
     fun updateConfig(
@@ -450,6 +474,7 @@ object TimerOverlayHelper {
             button2 = config.content.button2,
             useLastPdfInfo = config.useLastPdfInfo,
             continueReadingStr = config.continueReadingStr,
+            closeOverlayProbability = config.closeOverlayProbability,
         )
         Log.d(TAG, "tryShowOverlay success source=$source")
         return true
@@ -721,6 +746,9 @@ object TimerOverlayHelper {
             bannerContents = if (isBanner) rows3.take(4).map(::decodeContentRow) else emptyList(),
             useLastPdfInfo = selectedType == 0,
             continueReadingStr = continueReadingStr,
+            closeOverlayProbability =
+                sharedPrefs.getInt(KEY_TIMER_OVERLAY_CLOSE_PROBABILITY, 100)
+                    .coerceIn(0, 100),
         )
     }
 
@@ -906,6 +934,7 @@ object TimerOverlayHelper {
         val bannerContents: List<TimerOverlayContent>,
         val useLastPdfInfo: Boolean,
         val continueReadingStr: String?,
+        val closeOverlayProbability: Int,
     )
 
     data class TimerOverlayDisplayContent(

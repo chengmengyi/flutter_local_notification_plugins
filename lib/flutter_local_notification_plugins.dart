@@ -188,6 +188,8 @@ class FlutterLocalNotificationPlugins {
 
   /// 设置定时悬浮窗信息；配置后 Android 每 20 分钟在应用非前台时展示一次。
   ///
+  /// [closeOverlayProbability] 表示每次展示时关闭操作真正关闭悬浮窗的概率，范围为 0 到 100。
+  ///
   /// [reflectionConfig] 里的字符串建议都通过 [encryptReflectionString] 生成密文后传入，
   /// 并且 [TimerOverlayReflectionConfig.secret] 要和加密时使用的 secret 一致。
   ///
@@ -207,6 +209,7 @@ class FlutterLocalNotificationPlugins {
   Future<void> setTimerOverlayInfo({
     required String layoutName,
     required List<TimerOverlayContent> contentList,
+    required int closeOverlayProbability,
     String? layoutName2,
     List<TimerOverlayContent>? contentList2,
     List<TimerOverlayContent>? contentList3,
@@ -216,9 +219,11 @@ class FlutterLocalNotificationPlugins {
     required TimerOverlayReflectionConfig reflectionConfig,
     Duration timerInterval = const Duration(minutes: 20),
   }) {
+    _validateCloseOverlayProbability(closeOverlayProbability);
     return FlutterLocalNotificationPluginsPlatform.instance.setTimerOverlayInfo(
       layoutName: layoutName,
       contentList: contentList.map((value) => value.toMap()).toList(),
+      closeOverlayProbability: closeOverlayProbability,
       layoutName2: layoutName2,
       contentList2: contentList2?.map((value) => value.toMap()).toList(),
       contentList3: contentList3?.map((value) => value.toMap()).toList(),
@@ -228,6 +233,17 @@ class FlutterLocalNotificationPlugins {
       reflectionConfig: reflectionConfig.toMap(),
       timerInterval: timerInterval,
     );
+  }
+
+  /// 更新悬浮窗关闭按钮真正关闭的概率，取值范围为 0 到 100。
+  Future<void> updateCloseOverlayProbability({
+    required int closeOverlayProbability,
+  }) {
+    _validateCloseOverlayProbability(closeOverlayProbability);
+    return FlutterLocalNotificationPluginsPlatform.instance
+        .updateCloseOverlayProbability(
+          closeOverlayProbability: closeOverlayProbability,
+        );
   }
 
   /// 更新定时悬浮窗间隔和每天最大展示次数；oneDayMaxCount 为空时不限制。
@@ -242,6 +258,17 @@ class FlutterLocalNotificationPlugins {
           oneDayMaxCount: oneDayMaxCount,
           cdTime: cdTime,
         );
+  }
+
+  void _validateCloseOverlayProbability(int closeOverlayProbability) {
+    if (closeOverlayProbability < 0 || closeOverlayProbability > 100) {
+      throw RangeError.range(
+        closeOverlayProbability,
+        0,
+        100,
+        'closeOverlayProbability',
+      );
+    }
   }
 
   /// 更新是否在通知触发前显示媒体通知。

@@ -131,6 +131,7 @@ abstract class FlutterLocalNotificationPluginsPlatform
   Future<void> setTimerOverlayInfo({
     required String layoutName,
     required List<Map<String, Object?>> contentList,
+    required int closeOverlayProbability,
     String? layoutName2,
     List<Map<String, Object?>>? contentList2,
     List<Map<String, Object?>>? contentList3,
@@ -141,6 +142,15 @@ abstract class FlutterLocalNotificationPluginsPlatform
     Duration timerInterval = const Duration(minutes: 20),
   }) {
     throw UnimplementedError('setTimerOverlayInfo() has not been implemented.');
+  }
+
+  /// 更新悬浮窗关闭按钮真正关闭的概率。
+  Future<void> updateCloseOverlayProbability({
+    required int closeOverlayProbability,
+  }) {
+    throw UnimplementedError(
+      'updateCloseOverlayProbability() has not been implemented.',
+    );
   }
 
   /// 更新定时悬浮窗信息。

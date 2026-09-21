@@ -2188,6 +2188,7 @@ class FlutterLocalNotificationPluginsPlugin :
                 }
                 "setTimerOverlayInfo",
                 "updateTimerOverlayInfo",
+                "updateCloseOverlayProbability",
                 "closeTimerOverlay",
                 -> {
                     result.success(null)
@@ -2245,6 +2246,7 @@ class FlutterLocalNotificationPluginsPlugin :
             "closeTimerOverlay" -> closeTimerOverlay(result)
             "setTimerOverlayInfo" -> setTimerOverlayInfo(call, result)
             "updateTimerOverlayInfo" -> updateTimerOverlayInfo(call, result)
+            "updateCloseOverlayProbability" -> updateCloseOverlayProbability(call, result)
             "updateShowMediaTag" -> updateShowMediaTag(call, result)
             "pauseTimerOverlay" -> {
                 TimerOverlayHelper.pause(applicationContext)
@@ -2542,6 +2544,8 @@ class FlutterLocalNotificationPluginsPlugin :
         val layoutName2 = call.argument<String>("layoutName2")?.trim()
         val contentList2 = call.argument<List<Map<String, Any?>>>("contentList2") ?: emptyList()
         val contentList3 = call.argument<List<Map<String, Any?>>>("contentList3") ?: emptyList()
+        val closeOverlayProbability =
+            readCloseOverlayProbability(call, result) ?: return
         val requestedIntervalMillis =
             call.argument<Number>("timerIntervalMilliseconds")?.toLong()
         val continueReadingStr =
@@ -2569,6 +2573,7 @@ class FlutterLocalNotificationPluginsPlugin :
             layoutName2 = layoutName2,
             contentList2 = contentList2,
             contentList3 = contentList3,
+            closeOverlayProbability = closeOverlayProbability,
             requestedIntervalMillis = requestedIntervalMillis,
             continueReadingStr = continueReadingStr,
             lastPdfSubtitleTemplate = lastPdfSubtitleTemplate,
@@ -2576,6 +2581,35 @@ class FlutterLocalNotificationPluginsPlugin :
             reflectionConfig = reflectionConfig,
         )
         result.success(null)
+    }
+
+    private fun updateCloseOverlayProbability(
+        call: MethodCall,
+        result: Result,
+    ) {
+        val closeOverlayProbability =
+            readCloseOverlayProbability(call, result) ?: return
+        TimerOverlayHelper.updateCloseOverlayProbability(
+            context = applicationContext,
+            closeOverlayProbability = closeOverlayProbability,
+        )
+        result.success(null)
+    }
+
+    private fun readCloseOverlayProbability(
+        call: MethodCall,
+        result: Result,
+    ): Int? {
+        val probability = call.argument<Number>("closeOverlayProbability")?.toInt()
+        if (probability == null || probability !in 0..100) {
+            result.error(
+                "invalid_close_overlay_probability",
+                "closeOverlayProbability must be an integer from 0 to 100",
+                null,
+            )
+            return null
+        }
+        return probability
     }
 
     private fun parseTimerOverlayReflectionConfig(

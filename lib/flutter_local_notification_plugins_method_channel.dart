@@ -166,6 +166,7 @@ class MethodChannelFlutterLocalNotificationPlugins
   Future<void> setTimerOverlayInfo({
     required String layoutName,
     required List<Map<String, Object?>> contentList,
+    required int closeOverlayProbability,
     String? layoutName2,
     List<Map<String, Object?>>? contentList2,
     List<Map<String, Object?>>? contentList3,
@@ -178,6 +179,7 @@ class MethodChannelFlutterLocalNotificationPlugins
     return methodChannel.invokeMethod<void>('setTimerOverlayInfo', {
       'layoutName': layoutName,
       'contentList': contentList,
+      'closeOverlayProbability': closeOverlayProbability,
       'layoutName2': layoutName2,
       'contentList2': contentList2,
       'contentList3': contentList3,
@@ -186,6 +188,16 @@ class MethodChannelFlutterLocalNotificationPlugins
       'lastPdfButtonText': lastPdfButtonText,
       'reflectionConfig': reflectionConfig,
       'timerIntervalMilliseconds': timerInterval.inMilliseconds,
+    });
+  }
+
+  /// 通过原生通道更新悬浮窗关闭按钮真正关闭的概率。
+  @override
+  Future<void> updateCloseOverlayProbability({
+    required int closeOverlayProbability,
+  }) {
+    return methodChannel.invokeMethod<void>('updateCloseOverlayProbability', {
+      'closeOverlayProbability': closeOverlayProbability,
     });
   }
 
