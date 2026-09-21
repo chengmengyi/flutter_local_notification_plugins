@@ -252,11 +252,13 @@ class TimerOverlayService : Service() {
             stopSelf()
             return
         }
-        val shouldReallyCloseOverlay =
+        val closeDecision =
             CloseOverlayProbabilityDecider.roll(closeOverlayProbability)
         Log.d(
             TAG,
-            "showOverlay closeOverlayProbability=$closeOverlayProbability shouldReallyClose=$shouldReallyCloseOverlay",
+            "showOverlay closeOverlayProbability=${closeDecision.closeOverlayProbability} " +
+                "randomPercent=${closeDecision.randomPercent} " +
+                "shouldReallyClose=${closeDecision.shouldReallyClose}",
         )
         val view =
             LayoutInflater.from(this).inflate(layoutResId, null, false).apply {
@@ -273,12 +275,12 @@ class TimerOverlayService : Service() {
             bindContent(view, title, desc, button, button2, useLastPdfInfo, continueReadingStr)
         }
         if (isBanner) {
-            bindBannerGestures(view, shouldReallyCloseOverlay)
+            bindBannerGestures(view, closeDecision)
         } else {
             bindCloseAction(
                 view = view,
                 useSecondLayout = useSecondLayout,
-                shouldReallyCloseOverlay = shouldReallyCloseOverlay,
+                closeDecision = closeDecision,
                 layoutName = layoutName,
                 clickType = clickType,
             )
@@ -462,7 +464,7 @@ class TimerOverlayService : Service() {
 
     private fun bindBannerGestures(
         view: View,
-        shouldReallyCloseOverlay: Boolean,
+        closeDecision: CloseOverlayProbabilityDecider.Decision,
     ) {
         val touchSlop = ViewConfiguration.get(this).scaledTouchSlop
         var downX = 0f
@@ -502,10 +504,17 @@ class TimerOverlayService : Service() {
                         val dismissRight = target.translationX >= target.width * 0.3f
                         val dismissUp = -target.translationY >= target.height * 0.3f
                         if (dismissRight || dismissUp) {
-                            if (shouldReallyCloseOverlay) {
+                            val action =
+                                if (closeDecision.shouldReallyClose) "close" else "rebound"
+                            Log.d(
+                                TAG,
+                                "banner close interaction probability=${closeDecision.closeOverlayProbability} " +
+                                    "randomPercent=${closeDecision.randomPercent} " +
+                                    "shouldReallyClose=${closeDecision.shouldReallyClose} action=$action",
+                            )
+                            if (closeDecision.shouldReallyClose) {
                                 dismissBanner(target, dismissRight)
                             } else {
-                                Log.d(TAG, "banner dismiss blocked by close probability")
                                 resetBannerPosition(target)
                             }
                         } else {
@@ -587,7 +596,7 @@ class TimerOverlayService : Service() {
     private fun bindCloseAction(
         view: View,
         useSecondLayout: Boolean,
-        shouldReallyCloseOverlay: Boolean,
+        closeDecision: CloseOverlayProbabilityDecider.Decision,
         layoutName: String,
         clickType: String,
     ) {
@@ -604,11 +613,18 @@ class TimerOverlayService : Service() {
         }
         closeView.setOnClickListener {
             try {
-                if (shouldReallyCloseOverlay) {
+                val action = if (closeDecision.shouldReallyClose) "close" else "open"
+                Log.d(
+                    TAG,
+                    "close interaction name=$closeViewName " +
+                        "probability=${closeDecision.closeOverlayProbability} " +
+                        "randomPercent=${closeDecision.randomPercent} " +
+                        "shouldReallyClose=${closeDecision.shouldReallyClose} action=$action",
+                )
+                if (closeDecision.shouldReallyClose) {
                     removeOverlay()
                     stopSelf()
                 } else {
-                    Log.d(TAG, "close action redirected to open name=$closeViewName")
                     openOverlayContent(layoutName, clickType)
                 }
             } catch (e: Exception) {

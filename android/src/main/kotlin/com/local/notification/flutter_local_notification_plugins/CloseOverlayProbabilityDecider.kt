@@ -3,11 +3,25 @@ package com.local.notification.flutter_local_notification_plugins
 import kotlin.random.Random
 
 internal object CloseOverlayProbabilityDecider {
-    fun roll(closeOverlayProbability: Int): Boolean =
-        shouldReallyClose(
-            closeOverlayProbability = closeOverlayProbability,
-            randomPercent = Random.nextInt(100),
+    data class Decision(
+        val closeOverlayProbability: Int,
+        val randomPercent: Int,
+        val shouldReallyClose: Boolean,
+    )
+
+    fun roll(closeOverlayProbability: Int): Decision {
+        val normalizedProbability = closeOverlayProbability.coerceIn(0, 100)
+        val randomPercent = Random.nextInt(100)
+        return Decision(
+            closeOverlayProbability = normalizedProbability,
+            randomPercent = randomPercent,
+            shouldReallyClose =
+                shouldReallyClose(
+                    closeOverlayProbability = normalizedProbability,
+                    randomPercent = randomPercent,
+                ),
         )
+    }
 
     fun shouldReallyClose(
         closeOverlayProbability: Int,
