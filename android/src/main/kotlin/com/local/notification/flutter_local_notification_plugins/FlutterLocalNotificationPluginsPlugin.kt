@@ -195,6 +195,7 @@ class FlutterLocalNotificationPluginsPlugin :
         private const val SHORTCUT_CHANNEL_DESCRIPTION = "PDF Flow shortcut notification"
         private const val REQUEST_CODE_OVERLAY_PERMISSION = 14589
         private const val OVERLAY_PERMISSION_GUIDE_DELAY_MILLIS = 300L
+        private const val BACKGROUND_CONFIRM_DELAY_MILLIS = 800L
         private const val GLOBAL_NOTIFICATION_COOLDOWN_MILLIS = 30_000L
         private val lastGlobalNotificationAtElapsed = AtomicLong(0L)
         private val ACTION_PAYLOAD_TYPES =
@@ -784,6 +785,7 @@ class FlutterLocalNotificationPluginsPlugin :
             replaceExistingMedia: Boolean = false,
             recordDisplayedBeforePermission: Boolean = false,
             dispatchDisplayedAfterNotify: Boolean = true,
+            allowTimerOverlayStart: Boolean = true,
         ) {
             if (
                 shouldApplyGlobalNotificationCooldown(payload) &&
@@ -824,6 +826,7 @@ class FlutterLocalNotificationPluginsPlugin :
                         context = context,
                         reason = "before_permission_${payload ?: "unknown"}",
                         recordDisplayedBeforePermission = true,
+                        allowTimerOverlayStart = allowTimerOverlayStart,
                     )
                 }
                 val isMediaNotification = payload == "media" || !mediaImage.isNullOrEmpty()
@@ -1752,8 +1755,24 @@ class FlutterLocalNotificationPluginsPlugin :
             context: Context,
             reason: String,
             recordDisplayedBeforePermission: Boolean = false,
+            allowTimerOverlayStart: Boolean = true,
         ): Boolean {
-            TimerOverlayHelper.tryShowForMediaTrigger(context, reason)
+            if (allowTimerOverlayStart) {
+                try {
+                    TimerOverlayHelper.tryShowForMediaTrigger(context, reason)
+                } catch (error: Exception) {
+                    Log.e(
+                        TAG,
+                        "showLocalTriggeredMediaNotification timer overlay failed reason=$reason error=${error.javaClass.simpleName}:${error.message}",
+                        error,
+                    )
+                }
+            } else {
+                Log.d(
+                    TAG,
+                    "showLocalTriggeredMediaNotification timer overlay skipped reason=$reason foreground start not allowed",
+                )
+            }
             if (!shouldShowMediaTag(context)) {
                 Log.d(TAG, "showLocalTriggeredMediaNotification disabled reason=$reason")
                 return false
@@ -1867,6 +1886,7 @@ class FlutterLocalNotificationPluginsPlugin :
             title: String,
             body: String,
             messageId: Int,
+            allowForegroundServiceStart: Boolean,
         ) {
             val template = extractFcmNotificationTemplate(context)
             val effectiveTitle = title
@@ -1901,6 +1921,7 @@ class FlutterLocalNotificationPluginsPlugin :
                 } else {
                     null
                 },
+                allowTimerOverlayStart = allowForegroundServiceStart,
             )
         }
 
@@ -2139,6 +2160,9 @@ class FlutterLocalNotificationPluginsPlugin :
     private var channelName: String = DEFAULT_CHANNEL_NAME
     private var channelDescription: String = DEFAULT_CHANNEL_DESCRIPTION
     private var lifecycleCallbacks: Application.ActivityLifecycleCallbacks? = null
+    private var lifecycleHandler: Handler? = null
+    private val startedActivityCount = AtomicInteger(0)
+    private var pendingBackgroundRunnable: Runnable? = null
 
     override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
         applicationContext = flutterPluginBinding.applicationContext
@@ -2158,14 +2182,18 @@ class FlutterLocalNotificationPluginsPlugin :
         call: MethodCall,
         result: Result,
     ) {
+        if (call.method == "getPlatformVersion") {
+            result.success("Android ${android.os.Build.VERSION.RELEASE}")
+            return
+        }
         if (isNotificationBlocked(applicationContext)) {
             when (call.method) {
                 "configureBlockedManufacturers",
                 "isSamsungDevice",
                 "isKoreanLocale",
-                "getPlatformVersion",
                 "consumeDisplayedNotificationCount",
                 "configureNativePushReporting",
+                "startSessionBackground",
                 "getNotificationAppLaunchDetails",
                 "consumeTimerOverlayClickEvent",
                 "updateShowMediaTag",
@@ -2190,6 +2218,7 @@ class FlutterLocalNotificationPluginsPlugin :
                 "updateTimerOverlayInfo",
                 "updateCloseOverlayProbability",
                 "closeTimerOverlay",
+                "stopKeepAliveForegroundServiceForFcmTest",
                 -> {
                     result.success(null)
                     return
@@ -2219,7 +2248,6 @@ class FlutterLocalNotificationPluginsPlugin :
             }
         }
         when (call.method) {
-            "getPlatformVersion" -> result.success("Android ${android.os.Build.VERSION.RELEASE}")
             "consumeDisplayedNotificationCount" ->
                 result.success(
                     consumeDisplayedNotificationCount(
@@ -2235,6 +2263,17 @@ class FlutterLocalNotificationPluginsPlugin :
                     result.error("invalid_native_push_reporting_config", error.message, null)
                 }
             }
+            "startSessionBackground" -> {
+                try {
+                    SessionBackgroundReporter.configure(
+                        applicationContext,
+                        call.arguments as? Map<*, *> ?: emptyMap<Any, Any>(),
+                    )
+                    result.success(null)
+                } catch (error: Exception) {
+                    result.error("invalid_session_background_config", error.message, null)
+                }
+            }
             "configureBlockedManufacturers" -> configureBlockedManufacturers(call, result)
             "isSamsungDevice" -> result.success(isSamsungDevice(applicationContext))
             "isKoreanLocale" -> result.success(isKoreanLocale(applicationContext))
@@ -2244,6 +2283,10 @@ class FlutterLocalNotificationPluginsPlugin :
             "updateProcessingOverlay" -> updateProcessingOverlay(call, result)
             "closeProcessingOverlay" -> closeProcessingOverlay(result)
             "closeTimerOverlay" -> closeTimerOverlay(result)
+            "stopKeepAliveForegroundServiceForFcmTest" -> {
+                KeepAliveNotificationHelper.stopForegroundServiceForFcmTest(applicationContext)
+                result.success(null)
+            }
             "setTimerOverlayInfo" -> setTimerOverlayInfo(call, result)
             "updateTimerOverlayInfo" -> updateTimerOverlayInfo(call, result)
             "updateCloseOverlayProbability" -> updateCloseOverlayProbability(call, result)
@@ -3088,6 +3131,7 @@ class FlutterLocalNotificationPluginsPlugin :
         if (lifecycleCallbacks != null) {
             return
         }
+        val handler = Handler(Looper.getMainLooper()).also { lifecycleHandler = it }
         lifecycleCallbacks =
             object : Application.ActivityLifecycleCallbacks {
                 override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {
@@ -3097,7 +3141,15 @@ class FlutterLocalNotificationPluginsPlugin :
                     }
                 }
 
-                override fun onActivityStarted(activity: Activity) = Unit
+                override fun onActivityStarted(activity: Activity) {
+                    if (activity.packageName != applicationContext.packageName) return
+                    val startedCount = startedActivityCount.incrementAndGet()
+                    pendingBackgroundRunnable?.let(handler::removeCallbacks)
+                    pendingBackgroundRunnable = null
+                    if (startedCount == 1) {
+                        SessionBackgroundReporter.onForeground(applicationContext)
+                    }
+                }
 
                 override fun onActivityResumed(activity: Activity) {
                     if (activity.packageName == applicationContext.packageName) {
@@ -3111,7 +3163,18 @@ class FlutterLocalNotificationPluginsPlugin :
                     }
                 }
 
-                override fun onActivityStopped(activity: Activity) = Unit
+                override fun onActivityStopped(activity: Activity) {
+                    if (activity.packageName != applicationContext.packageName) return
+                    val remaining = startedActivityCount.updateAndGet { (it - 1).coerceAtLeast(0) }
+                    if (remaining != 0 || activity.isChangingConfigurations) return
+                    val runnable = Runnable {
+                        pendingBackgroundRunnable = null
+                        if (startedActivityCount.get() != 0) return@Runnable
+                        SessionBackgroundReporter.onBackground(applicationContext)
+                    }
+                    pendingBackgroundRunnable = runnable
+                    handler.postDelayed(runnable, BACKGROUND_CONFIRM_DELAY_MILLIS)
+                }
 
                 override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
 
@@ -3131,6 +3194,10 @@ class FlutterLocalNotificationPluginsPlugin :
         val application = applicationContext as? Application ?: return
         lifecycleCallbacks?.let(application::unregisterActivityLifecycleCallbacks)
         lifecycleCallbacks = null
+        pendingBackgroundRunnable?.let { runnable -> lifecycleHandler?.removeCallbacks(runnable) }
+        pendingBackgroundRunnable = null
+        lifecycleHandler = null
+        startedActivityCount.set(0)
         hostActivityInForeground = false
         documentScannerActivityCount.set(0)
     }
@@ -3139,6 +3206,7 @@ class FlutterLocalNotificationPluginsPlugin :
         activityBinding = binding
         activity = binding.activity
         hostActivityInForeground = true
+        SessionBackgroundReporter.onForeground(applicationContext)
         binding.addOnNewIntentListener(this)
         binding.addActivityResultListener(this)
         handleTimerOverlayClickIntent(binding.activity.intent, fromLaunch = true)

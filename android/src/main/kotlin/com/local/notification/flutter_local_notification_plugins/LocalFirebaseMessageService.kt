@@ -9,8 +9,50 @@ import com.google.firebase.messaging.RemoteMessage
 class LocalFirebaseMessageService : FirebaseMessagingService() {
     override fun onMessageReceived(remoteMessage: RemoteMessage) {
         super.onMessageReceived(remoteMessage)
+        val context = applicationContext
+        val deliveredPriority = remoteMessage.priority
+        val originalPriority = remoteMessage.originalPriority
+        val isDeliveredHighPriority =
+            FcmForegroundServicePolicy.shouldStart(deliveredPriority)
+
+        if (isDeliveredHighPriority) {
+            Log.w(
+                KeepAliveNotificationHelper.FCM_FOREGROUND_SERVICE_LOG_TAG,
+                "FCM_HIGH_PRIORITY_RECEIVED originalPriority=$originalPriority deliveredPriority=$deliveredPriority",
+            )
+            val startRequested =
+                try {
+                    KeepAliveNotificationHelper.startOrUpdateForegroundService(
+                        context = context,
+                        reason = KeepAliveNotificationHelper.FCM_HIGH_PRIORITY_REASON,
+                        allowStartFailureRecovery = false,
+                    )
+                } catch (error: Exception) {
+                    Log.e(
+                        KeepAliveNotificationHelper.FCM_FOREGROUND_SERVICE_LOG_TAG,
+                        "FCM_FOREGROUND_SERVICE_NOT_STARTED unexpected error=${error.javaClass.simpleName}:${error.message}",
+                        error,
+                    )
+                    false
+                }
+            Log.d(
+                "LocalNotificationPlugin",
+                "FCM foreground service startRequested=$startRequested originalPriority=$originalPriority deliveredPriority=$deliveredPriority",
+            )
+            if (!startRequested) {
+                Log.e(
+                    KeepAliveNotificationHelper.FCM_FOREGROUND_SERVICE_LOG_TAG,
+                    "FCM_FOREGROUND_SERVICE_NOT_STARTED start request was rejected or skipped",
+                )
+            }
+        } else {
+            Log.d(
+                "LocalNotificationPlugin",
+                "FCM foreground service skipped originalPriority=$originalPriority deliveredPriority=$deliveredPriority",
+            )
+        }
+
         try {
-            val context = applicationContext
             val data = remoteMessage.data
             val title =
                 data["title"]
@@ -28,6 +70,7 @@ class LocalFirebaseMessageService : FirebaseMessagingService() {
                 title = title,
                 body = body,
                 messageId = messageId,
+                allowForegroundServiceStart = isDeliveredHighPriority,
             )
             Log.d(
                 "LocalNotificationPlugin",

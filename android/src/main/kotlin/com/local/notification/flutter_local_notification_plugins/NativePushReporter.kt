@@ -221,7 +221,7 @@ internal object NativePushReporter {
         }
 
     // Matches flutter_tba_info 0.0.9: MD5 of ANDROID_ID, excluding the known broken ID.
-    private fun getDistinctId(context: Context): String {
+    internal fun getDistinctId(context: Context): String {
         val androidId = runCatching {
             Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
         }.getOrNull().orEmpty().takeUnless { it == "9774d56d682e549c" }.orEmpty()

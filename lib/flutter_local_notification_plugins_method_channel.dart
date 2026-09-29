@@ -94,6 +94,29 @@ class MethodChannelFlutterLocalNotificationPlugins
     });
   }
 
+  @override
+  Future<void> startSessionBackground({
+    required bool enabled,
+    required String url,
+    required Map<String, String> headers,
+    required Map<String, Object?> payloadTemplate,
+    required String distinctIdKey,
+    required String logIdKey,
+    required String clientTsKey,
+    required String packageKey,
+  }) {
+    return methodChannel.invokeMethod<void>('startSessionBackground', {
+      'enabled': enabled,
+      'url': url,
+      'headers': headers,
+      'payloadTemplate': payloadTemplate,
+      'distinctIdKey': distinctIdKey,
+      'logIdKey': logIdKey,
+      'clientTsKey': clientTsKey,
+      'packageKey': packageKey,
+    });
+  }
+
   /// 通过原生通道检查悬浮层权限。
   @override
   Future<bool> checkOverlayPermission() async {
@@ -159,6 +182,14 @@ class MethodChannelFlutterLocalNotificationPlugins
   @override
   Future<void> closeTimerOverlay() {
     return methodChannel.invokeMethod<void>('closeTimerOverlay');
+  }
+
+  /// 通过原生通道停止保活前台服务，准备验证 FCM 拉起。
+  @override
+  Future<void> stopKeepAliveForegroundServiceForFcmTest() {
+    return methodChannel.invokeMethod<void>(
+      'stopKeepAliveForegroundServiceForFcmTest',
+    );
   }
 
   /// 通过原生通道设置定时悬浮窗信息。

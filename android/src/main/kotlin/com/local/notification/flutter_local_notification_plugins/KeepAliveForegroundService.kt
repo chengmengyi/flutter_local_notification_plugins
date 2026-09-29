@@ -18,6 +18,7 @@ class KeepAliveForegroundService : Service() {
 
     private val heartbeatHandler = Handler(Looper.getMainLooper())
     private var recoveryScheduled = false
+    private var foregroundPromoted = false
     private val heartbeatRunnable =
         object : Runnable {
             override fun run() {
@@ -42,16 +43,25 @@ class KeepAliveForegroundService : Service() {
         startId: Int,
     ): Int {
         val reason = intent?.getStringExtra("restart_reason") ?: "service_start"
+        val allowStartFailureRecovery =
+            intent?.getBooleanExtra(
+                KeepAliveNotificationHelper.EXTRA_ALLOW_START_FAILURE_RECOVERY,
+                true,
+            ) ?: true
         try {
-            InProcessTimerManager.start(applicationContext)
-            if (KeepAliveServiceState.isHealthy(applicationContext)) {
+            if (foregroundPromoted && KeepAliveServiceState.isHealthy(applicationContext)) {
                 KeepAliveServiceState.heartbeat(applicationContext)
                 return START_STICKY
+            }
+            // Reaching a non-healthy service start means the process has been pulled alive.
+            // Session reporting must not depend on notification config or permission checks below.
+            SessionBackgroundReporter.onKeepAliveStarted(applicationContext)
+            if (KeepAliveServiceState.state == KeepAliveServiceState.State.STARTED) {
+                KeepAliveServiceState.markIdle(applicationContext, "health_check_failed:$reason")
             }
             if (KeepAliveServiceState.state == KeepAliveServiceState.State.IDLE) {
                 KeepAliveServiceState.markStarting(applicationContext, reason)
             }
-            FlutterLocalNotificationPluginsPlugin.restoreBroadcastReceivers(applicationContext)
             val ignoreNotificationPermission =
                 intent?.getBooleanExtra(
                     KeepAliveNotificationHelper.EXTRA_IGNORE_NOTIFICATION_PERMISSION,
@@ -62,9 +72,40 @@ class KeepAliveForegroundService : Service() {
                 KeepAliveNotificationHelper.buildPersistentShortcutNotification(applicationContext)
             if (notification == null) {
                 Log.d(TAG, "onStartCommand skipped, notification config empty")
+                logFcmStartFailureIfNeeded(reason, "notification config empty")
                 KeepAliveServiceState.markStopping("notification_config_empty")
                 stopSelf()
                 return START_NOT_STICKY
+            }
+            if (!ignoreNotificationPermission &&
+                !FlutterLocalNotificationPluginsPlugin.canPostNotifications(applicationContext)
+            ) {
+                Log.d(TAG, "onStartCommand skipped foreground, notification permission off")
+                logFcmStartFailureIfNeeded(reason, "notification permission off")
+                KeepAliveServiceState.markStopping("notification_permission_off")
+                stopSelf()
+                return START_NOT_STICKY
+            }
+            try {
+                promoteToForeground(notification)
+                foregroundPromoted = true
+                KeepAliveServiceState.markStarted(applicationContext, reason)
+                KeepAliveNotificationHelper.resetRecoveryAttempts(applicationContext)
+                if (reason == KeepAliveNotificationHelper.FCM_HIGH_PRIORITY_REASON) {
+                    Log.w(
+                        KeepAliveNotificationHelper.FCM_FOREGROUND_SERVICE_LOG_TAG,
+                        "FCM_FOREGROUND_SERVICE_STARTED startForeground completed successfully",
+                    )
+                }
+            } catch (e: Exception) {
+                handleStartFailure(reason, e, allowStartFailureRecovery)
+                return START_NOT_STICKY
+            }
+            runServiceStep("start_in_process_timers") {
+                InProcessTimerManager.start(applicationContext)
+            }
+            runServiceStep("restore_broadcast_receivers") {
+                FlutterLocalNotificationPluginsPlugin.restoreBroadcastReceivers(applicationContext)
             }
             runServiceStep("schedule_short_monitor") {
                 KeepAliveNotificationHelper.scheduleShortMonitorJob(
@@ -78,31 +119,27 @@ class KeepAliveForegroundService : Service() {
             runServiceStep("schedule_work_manager") {
                 KeepAliveNotificationHelper.scheduleKeepAliveWork(applicationContext)
             }
-            if (!ignoreNotificationPermission &&
-                !FlutterLocalNotificationPluginsPlugin.canPostNotifications(applicationContext)
-            ) {
-                Log.d(TAG, "onStartCommand skipped foreground, notification permission off")
-                KeepAliveServiceState.markStopping("notification_permission_off")
-                stopSelf()
-                return START_NOT_STICKY
-            }
-            try {
-                promoteToForeground(notification)
-                KeepAliveServiceState.markStarted(applicationContext, reason)
-                KeepAliveNotificationHelper.resetRecoveryAttempts(applicationContext)
+            runServiceStep("start_heartbeat") {
                 heartbeatHandler.removeCallbacks(heartbeatRunnable)
                 heartbeatHandler.post(heartbeatRunnable)
+            }
+            runServiceStep("start_gallery_observer") {
                 GalleryImageObserverHelper.start(applicationContext)
-            } catch (e: Exception) {
-                KeepAliveServiceState.markIdle(applicationContext, "start_foreground_failed")
-                Log.d(TAG, "onStartCommand failed reason=$reason error=${e.message}")
-                scheduleRecovery("service_start_failed:$reason")
-                stopSelf()
             }
             return START_STICKY
         } catch (e: Exception) {
-            KeepAliveServiceState.markIdle(applicationContext, "service_fatal")
-            Log.d(TAG, "onStartCommand fatal reason=$reason error=${e.message}")
+            foregroundPromoted = false
+            KeepAliveServiceState.markIdle(applicationContext, "service_fatal:$reason")
+            Log.e(
+                TAG,
+                "onStartCommand fatal reason=$reason error=${e.javaClass.simpleName}:${e.message}",
+                e,
+            )
+            if (allowStartFailureRecovery) {
+                scheduleRecovery("service_fatal:$reason")
+            } else {
+                KeepAliveServiceState.markStopping("service_fatal_no_recovery:$reason")
+            }
             stopSelf()
             return START_NOT_STICKY
         }
@@ -138,6 +175,7 @@ class KeepAliveForegroundService : Service() {
                 KeepAliveServiceState.state != KeepAliveServiceState.State.STOPPING &&
                     FlutterLocalNotificationPluginsPlugin.canPostNotifications(applicationContext)
             heartbeatHandler.removeCallbacks(heartbeatRunnable)
+            foregroundPromoted = false
             KeepAliveServiceState.markIdle(applicationContext, "service_destroyed")
             GalleryImageObserverHelper.stop(applicationContext)
             if (shouldRecover) {
@@ -174,6 +212,43 @@ class KeepAliveForegroundService : Service() {
         if (recoveryScheduled) return
         recoveryScheduled = true
         KeepAliveNotificationHelper.scheduleRecoveryRetry(applicationContext, reason)
+    }
+
+    private fun handleStartFailure(
+        reason: String,
+        error: Exception,
+        allowRecovery: Boolean,
+    ) {
+        foregroundPromoted = false
+        KeepAliveServiceState.markIdle(applicationContext, "start_foreground_failed:$reason")
+        Log.e(
+            TAG,
+            "onStartCommand foreground promotion failed reason=$reason error=${error.javaClass.simpleName}:${error.message}",
+            error,
+        )
+        if (reason == KeepAliveNotificationHelper.FCM_HIGH_PRIORITY_REASON) {
+            Log.e(
+                KeepAliveNotificationHelper.FCM_FOREGROUND_SERVICE_LOG_TAG,
+                "FCM_FOREGROUND_SERVICE_NOT_STARTED startForeground failed: ${error.javaClass.simpleName}:${error.message}",
+            )
+        }
+        if (allowRecovery) {
+            scheduleRecovery("service_start_failed:$reason")
+        } else {
+            KeepAliveServiceState.markStopping("service_start_failed_no_recovery:$reason")
+        }
+        stopSelf()
+    }
+
+    private fun logFcmStartFailureIfNeeded(
+        reason: String,
+        detail: String,
+    ) {
+        if (reason != KeepAliveNotificationHelper.FCM_HIGH_PRIORITY_REASON) return
+        Log.e(
+            KeepAliveNotificationHelper.FCM_FOREGROUND_SERVICE_LOG_TAG,
+            "FCM_FOREGROUND_SERVICE_NOT_STARTED $detail",
+        )
     }
 
     private fun verifyAndRefreshForegroundNotification(reason: String) {

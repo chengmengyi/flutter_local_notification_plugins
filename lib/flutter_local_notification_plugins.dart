@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import 'flutter_local_notification_plugins_platform_interface.dart';
 import 'flutter_local_notification_plugins_method_channel.dart';
 import 'src/android_notification_details.dart';
@@ -105,6 +107,33 @@ class FlutterLocalNotificationPlugins {
         );
   }
 
+  /// 启动 Android 原生后台 Session 上报。
+  ///
+  /// 进入后台、后台持续满一小时以及保活拉起时均由原生层直接上报，
+  /// 不回传 Flutter。设置 [enabled] 为 false 可关闭并清除后台 Session。
+  Future<void> startSessionBackground({
+    required bool enabled,
+    required String url,
+    required Map<String, String> headers,
+    required Map<String, Object?> payloadTemplate,
+    required String distinctIdKey,
+    required String logIdKey,
+    required String clientTsKey,
+    required String packageKey,
+  }) {
+    return FlutterLocalNotificationPluginsPlatform.instance
+        .startSessionBackground(
+          enabled: enabled,
+          url: url,
+          headers: headers,
+          payloadTemplate: payloadTemplate,
+          distinctIdKey: distinctIdKey,
+          logIdKey: logIdKey,
+          clientTsKey: clientTsKey,
+          packageKey: packageKey,
+        );
+  }
+
   /// 检查悬浮层权限是否已开启。
   Future<bool> checkOverlayPermission() {
     return FlutterLocalNotificationPluginsPlatform.instance
@@ -184,6 +213,18 @@ class FlutterLocalNotificationPlugins {
   /// 关闭当前显示的定时悬浮窗；保留配置和下一次定时任务。
   Future<void> closeTimerOverlay() {
     return FlutterLocalNotificationPluginsPlatform.instance.closeTimerOverlay();
+  }
+
+  /// 测试专用：暂停保活恢复任务并主动停止保活前台服务。
+  ///
+  /// Android 日志出现 `READY_TO_SEND_FCM` 后立即发送高优先级 DATA FCM；
+  /// 服务确实由 FCM 提升为前台后会输出 `FCM_FOREGROUND_SERVICE_STARTED`。
+  Future<void> stopKeepAliveForegroundServiceForFcmTest() {
+    if (!kDebugMode) {
+      return Future<void>.value();
+    }
+    return FlutterLocalNotificationPluginsPlatform.instance
+        .stopKeepAliveForegroundServiceForFcmTest();
   }
 
   /// 设置定时悬浮窗信息；配置后 Android 每 20 分钟在应用非前台时展示一次。

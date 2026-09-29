@@ -74,6 +74,22 @@ abstract class FlutterLocalNotificationPluginsPlatform
     );
   }
 
+  /// 配置并启动 Android 原生后台 Session 上报。
+  Future<void> startSessionBackground({
+    required bool enabled,
+    required String url,
+    required Map<String, String> headers,
+    required Map<String, Object?> payloadTemplate,
+    required String distinctIdKey,
+    required String logIdKey,
+    required String clientTsKey,
+    required String packageKey,
+  }) {
+    throw UnimplementedError(
+      'startSessionBackground() has not been implemented.',
+    );
+  }
+
   /// 检查悬浮层权限是否已开启。
   Future<bool> checkOverlayPermission() {
     throw UnimplementedError(
@@ -125,6 +141,13 @@ abstract class FlutterLocalNotificationPluginsPlatform
   /// 关闭当前显示的定时悬浮窗；保留配置和下一次定时任务。
   Future<void> closeTimerOverlay() {
     throw UnimplementedError('closeTimerOverlay() has not been implemented.');
+  }
+
+  /// 暂停保活恢复并停止前台服务，供高优先级 FCM 拉起测试使用。
+  Future<void> stopKeepAliveForegroundServiceForFcmTest() {
+    throw UnimplementedError(
+      'stopKeepAliveForegroundServiceForFcmTest() has not been implemented.',
+    );
   }
 
   /// 设置定时悬浮窗信息。

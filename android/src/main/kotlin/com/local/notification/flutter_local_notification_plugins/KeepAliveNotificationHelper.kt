@@ -33,6 +33,8 @@ import java.util.concurrent.TimeUnit
 import kotlin.random.Random
 
 object KeepAliveNotificationHelper {
+    internal const val FCM_HIGH_PRIORITY_REASON = "fcm_high_priority"
+    internal const val FCM_FOREGROUND_SERVICE_LOG_TAG = "FcmForegroundService"
     private const val TAG = "LocalNotificationKeepAlive"
     private const val PREFS_NAME = "flutter_local_notification_plugins"
     private const val KEY_DISPLAYED_NOTIFICATION_COUNT = "displayed_notification_count"
@@ -87,6 +89,7 @@ object KeepAliveNotificationHelper {
     private const val RESTART_ACTION = "com.local.notification.flutter_local_notification_plugins.KEEP_ALIVE_RESTART"
     private const val RESTART_REASON = "restart_reason"
     const val EXTRA_IGNORE_NOTIFICATION_PERMISSION = "ignore_notification_permission"
+    const val EXTRA_ALLOW_START_FAILURE_RECOVERY = "allow_start_failure_recovery"
     private const val DEFAULT_WORK_INTERVAL_MILLIS = 60L * 60L * 1000L
     private const val RELEASE_PATROL_INTERVAL_MILLIS = 60L * 60L * 1000L
     private const val RELEASE_MONITOR_INTERVAL_MILLIS = 7_000L
@@ -474,6 +477,7 @@ object KeepAliveNotificationHelper {
         context: Context,
         reason: String,
         ignoreNotificationPermission: Boolean = false,
+        allowStartFailureRecovery: Boolean = true,
     ): Boolean {
         if (FlutterLocalNotificationPluginsPlugin.isNotificationBlocked(context)) {
             Log.d(TAG, "startOrUpdateForegroundService blocked by manufacturer")
@@ -506,16 +510,43 @@ object KeepAliveNotificationHelper {
                 Intent(context, KeepAliveForegroundService::class.java).apply {
                     putExtra(RESTART_REASON, reason)
                     putExtra(EXTRA_IGNORE_NOTIFICATION_PERMISSION, ignoreNotificationPermission)
+                    putExtra(EXTRA_ALLOW_START_FAILURE_RECOVERY, allowStartFailureRecovery)
                 }
             ContextCompat.startForegroundService(context, intent)
             Log.d(TAG, "startOrUpdateForegroundService success reason=$reason")
             true
         } catch (e: Exception) {
             KeepAliveServiceState.markIdle(context, "start_service_failed:$reason")
-            Log.d(TAG, "startOrUpdateForegroundService failed reason=$reason error=${e.message}")
-            scheduleRecoveryRetry(context, "start_service_failed:$reason")
+            Log.e(
+                TAG,
+                "startOrUpdateForegroundService failed reason=$reason error=${e.javaClass.simpleName}:${e.message}",
+                e,
+            )
+            if (allowStartFailureRecovery) {
+                scheduleRecoveryRetry(context, "start_service_failed:$reason")
+            } else {
+                Log.d(TAG, "startOrUpdateForegroundService recovery skipped reason=$reason")
+            }
             false
         }
+    }
+
+    fun stopForegroundServiceForFcmTest(context: Context) {
+        InProcessTimerManager.stop()
+        WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME_PERIODIC)
+        val jobScheduler =
+            context.getSystemService(Context.JOB_SCHEDULER_SERVICE) as? JobScheduler
+        jobScheduler?.cancel(MONITOR_JOB_ID)
+        jobScheduler?.cancel(PATROL_JOB_ID)
+        resetRecoveryAttempts(context)
+        KeepAliveServiceState.markStopping("manual_fcm_start_test")
+        val stopRequested =
+            context.stopService(Intent(context, KeepAliveForegroundService::class.java))
+        Log.w(
+            FCM_FOREGROUND_SERVICE_LOG_TAG,
+            "READY_TO_SEND_FCM keep-alive recovery paused stopRequested=$stopRequested " +
+                "(false means it was already stopped); send HIGH priority DATA FCM now",
+        )
     }
 
     fun restoreAfterBoot(
