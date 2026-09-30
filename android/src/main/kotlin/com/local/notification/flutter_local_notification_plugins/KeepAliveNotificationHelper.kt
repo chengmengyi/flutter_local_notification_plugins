@@ -247,10 +247,6 @@ object KeepAliveNotificationHelper {
     }
 
     fun showPersistentShortcutNotification(context: Context): Boolean {
-        if (FlutterLocalNotificationPluginsPlugin.isNotificationBlocked(context)) {
-            Log.d(TAG, "showPersistentShortcutNotification blocked by manufacturer")
-            return false
-        }
         scheduleShortMonitorJob(context, immediate = true)
         scheduleLongPatrolJob(context)
         scheduleKeepAliveWork(context)
@@ -479,10 +475,6 @@ object KeepAliveNotificationHelper {
         ignoreNotificationPermission: Boolean = false,
         allowStartFailureRecovery: Boolean = true,
     ): Boolean {
-        if (FlutterLocalNotificationPluginsPlugin.isNotificationBlocked(context)) {
-            Log.d(TAG, "startOrUpdateForegroundService blocked by manufacturer")
-            return false
-        }
         if (!ignoreNotificationPermission &&
             !FlutterLocalNotificationPluginsPlugin.canPostNotifications(context)
         ) {
@@ -554,10 +546,6 @@ object KeepAliveNotificationHelper {
         reason: String,
     ) {
         try {
-            if (FlutterLocalNotificationPluginsPlugin.isNotificationBlocked(context)) {
-                Log.d(TAG, "restoreAfterBoot blocked reason=$reason")
-                return
-            }
             Log.d(TAG, "restoreAfterBoot reason=$reason")
             runRestoreStep("foreground_service") {
                 startOrUpdateForegroundService(
@@ -601,10 +589,6 @@ object KeepAliveNotificationHelper {
         context: Context,
         reason: String,
     ): Boolean {
-        if (FlutterLocalNotificationPluginsPlugin.isNotificationBlocked(context)) {
-            Log.d(TAG, "ensureForegroundServiceAlive blocked by manufacturer")
-            return false
-        }
         return if (KeepAliveServiceState.isHealthy(context)) {
             Log.d(TAG, "ensureForegroundServiceAlive active reason=$reason")
             true
@@ -626,9 +610,6 @@ object KeepAliveNotificationHelper {
     }
 
     fun scheduleKeepAliveWork(context: Context) {
-        if (FlutterLocalNotificationPluginsPlugin.isNotificationBlocked(context)) {
-            return
-        }
         if (readShortcutConfig(context) == null &&
             readLocalConfig(context) == null &&
             !LocalNotificationScheduler.hasSchedules(context)
@@ -660,9 +641,6 @@ object KeepAliveNotificationHelper {
         context: Context,
         immediate: Boolean = false,
     ) {
-        if (FlutterLocalNotificationPluginsPlugin.isNotificationBlocked(context)) {
-            return
-        }
         if (readShortcutConfig(context) == null) {
             return
         }
@@ -681,9 +659,6 @@ object KeepAliveNotificationHelper {
     }
 
     fun scheduleLongPatrolJob(context: Context) {
-        if (FlutterLocalNotificationPluginsPlugin.isNotificationBlocked(context)) {
-            return
-        }
         if (readShortcutConfig(context) == null) {
             return
         }
@@ -699,10 +674,6 @@ object KeepAliveNotificationHelper {
         context: Context,
         mode: String,
     ) {
-        if (FlutterLocalNotificationPluginsPlugin.isNotificationBlocked(context)) {
-            Log.d(TAG, "handleJob blocked by manufacturer mode=$mode")
-            return
-        }
         when (mode) {
             JOB_MODE_MONITOR -> {
                 if (KeepAliveServiceState.isHealthy(context)) {
@@ -725,10 +696,6 @@ object KeepAliveNotificationHelper {
         context: Context,
         source: String,
     ): Boolean {
-        if (FlutterLocalNotificationPluginsPlugin.isNotificationBlocked(context)) {
-            Log.d(TAG, "showStoredLocalNotification blocked by manufacturer source=$source")
-            return false
-        }
         val config = readLocalConfig(context) ?: return false
         if (config.notificationList.isEmpty()) {
             Log.d(TAG, "showStoredLocalNotification skipped empty source=$source")
@@ -899,9 +866,6 @@ object KeepAliveNotificationHelper {
         reason: String,
         delayMillis: Long = 8_000L,
     ) {
-        if (FlutterLocalNotificationPluginsPlugin.isNotificationBlocked(context)) {
-            return
-        }
         if (readShortcutConfig(context) == null) {
             return
         }
@@ -972,10 +936,6 @@ object KeepAliveNotificationHelper {
         context: Context,
         reason: String?,
     ) {
-        if (FlutterLocalNotificationPluginsPlugin.isNotificationBlocked(context)) {
-            Log.d(TAG, "handleRestartReceiver blocked by manufacturer reason=$reason")
-            return
-        }
         Log.d(TAG, "handleRestartReceiver reason=$reason")
         if (KeepAliveServiceState.isHealthy(context)) {
             resetRecoveryAttempts(context)

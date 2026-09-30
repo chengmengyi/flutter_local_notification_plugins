@@ -318,16 +318,6 @@ class MethodChannelFlutterLocalNotificationPlugins
     return result ?? false;
   }
 
-  /// 通过原生通道配置需要屏蔽通知的手机品牌列表。
-  @override
-  Future<void> configureBlockedManufacturers({
-    required List<String> manufacturers,
-  }) {
-    return methodChannel.invokeMethod<void>('configureBlockedManufacturers', {
-      'manufacturers': manufacturers,
-    });
-  }
-
   /// 通过原生通道判断当前手机是否为三星。
   @override
   Future<bool> isSamsungDevice() async {

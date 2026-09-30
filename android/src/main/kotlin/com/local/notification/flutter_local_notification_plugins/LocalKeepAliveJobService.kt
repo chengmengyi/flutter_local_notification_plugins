@@ -14,10 +14,6 @@ class LocalKeepAliveJobService : JobService() {
         if (params == null) {
             return false
         }
-        if (FlutterLocalNotificationPluginsPlugin.isNotificationBlocked(applicationContext)) {
-            Log.d(TAG, "onStartJob blocked")
-            return false
-        }
         val mode = params.extras?.getString("job_mode") ?: "monitor"
         Log.d(TAG, "onStartJob mode=$mode")
         thread(name = "local-keep-alive-job-$mode") {

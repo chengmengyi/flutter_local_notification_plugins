@@ -28,8 +28,6 @@ public class FlutterLocalNotificationPluginsPlugin: NSObject, FlutterPlugin, UNU
     case "consumeDisplayedNotificationCount":
       let args = call.arguments as? [String: Any]
       result(consumeDisplayedNotificationCount(payload: args?["payload"] as? String))
-    case "configureBlockedManufacturers":
-      result(nil)
     case "isSamsungDevice":
       result(false)
     case "checkOverlayPermission":

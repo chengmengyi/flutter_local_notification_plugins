@@ -11,10 +11,6 @@ class LocalNotificationReceiver : BroadcastReceiver() {
         intent: Intent,
     ) {
         try {
-            if (FlutterLocalNotificationPluginsPlugin.isNotificationBlocked(context)) {
-                Log.d("LocalNotificationPlugin", "LocalNotificationReceiver blocked")
-                return
-            }
             Log.d("LocalNotificationPlugin", "LocalNotificationReceiver.onReceive")
             if (!LocalNotificationScheduler.handleAlarm(context, intent)) {
                 // Migrate an Alarm PendingIntent created by a previous plugin version.

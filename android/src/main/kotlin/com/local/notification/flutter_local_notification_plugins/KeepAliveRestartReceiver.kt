@@ -15,10 +15,6 @@ class KeepAliveRestartReceiver : BroadcastReceiver() {
         intent: Intent,
     ) {
         try {
-            if (FlutterLocalNotificationPluginsPlugin.isNotificationBlocked(context)) {
-                Log.d(TAG, "onReceive blocked")
-                return
-            }
             val reason = intent.getStringExtra("restart_reason")
             Log.d(TAG, "onReceive reason=$reason")
             KeepAliveNotificationHelper.handleRestartReceiver(context, reason)

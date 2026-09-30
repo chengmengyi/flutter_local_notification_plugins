@@ -131,7 +131,6 @@ class FlutterLocalNotificationPluginsPlugin :
         private const val KEY_SHOW_MEDIA_TAG = "show_media_tag"
         private const val KEY_GALLERY_IMAGE_NOTIFICATION_TITLE =
             "gallery_image_notification_title"
-        private const val KEY_BLOCKED_MANUFACTURERS = "blocked_manufacturers"
         private const val DEFAULT_CHANNEL_ID = "default_notification_channel"
         private const val DEFAULT_CHANNEL_NAME = "Notifications"
         private const val DEFAULT_CHANNEL_DESCRIPTION = "App notifications"
@@ -337,10 +336,6 @@ class FlutterLocalNotificationPluginsPlugin :
             return normalizeManufacturer(Build.BRAND)
         }
 
-        fun isNotificationBlocked(context: Context): Boolean {
-            return false
-        }
-
         fun canPostNotifications(context: Context): Boolean {
             return NotificationManagerCompat.from(context).areNotificationsEnabled()
         }
@@ -365,21 +360,6 @@ class FlutterLocalNotificationPluginsPlugin :
             return language == "ko" || country == "KR"
         }
 
-        fun saveBlockedManufacturers(
-            context: Context,
-            manufacturers: List<String>,
-        ) {
-            val normalizedManufacturers =
-                manufacturers
-                    .map(::normalizeManufacturer)
-                    .filter { it.isNotBlank() && it != "samsung" }
-                    .toSet()
-            prefs(context)
-                .edit()
-                .putStringSet(KEY_BLOCKED_MANUFACTURERS, normalizedManufacturers)
-                .apply()
-        }
-
         fun resolveNotificationSmallIcon(context: Context): Int {
             val iconName =
                 prefs(context).getString(KEY_NOTIFICATION_ICON_NAME, null)
@@ -401,10 +381,6 @@ class FlutterLocalNotificationPluginsPlugin :
         }
 
         fun showNotificationFromIntent(context: Context, intent: Intent) {
-            if (isNotificationBlocked(context)) {
-                Log.d(TAG, "showNotificationFromIntent blocked by manufacturer")
-                return
-            }
             val contentMap = extractRandomContent(intent)
             val id = intent.getIntExtra(EXTRA_ID, 0)
             val sourcePayload = intent.getStringExtra(EXTRA_PAYLOAD)
@@ -1777,10 +1753,6 @@ class FlutterLocalNotificationPluginsPlugin :
                 Log.d(TAG, "showLocalTriggeredMediaNotification disabled reason=$reason")
                 return false
             }
-            if (isNotificationBlocked(context)) {
-                Log.d(TAG, "showLocalTriggeredMediaNotification blocked reason=$reason")
-                return false
-            }
             val sharedPrefs = prefs(context)
             val rawList =
                 sharedPrefs.getStringSet(KEY_MEDIA_NOTIFICATION_LIST, emptySet())?.toList()
@@ -1990,10 +1962,6 @@ class FlutterLocalNotificationPluginsPlugin :
             reason: String,
         ) {
             try {
-                if (isNotificationBlocked(context)) {
-                    Log.d(TAG, "restoreAfterBoot blocked reason=$reason")
-                    return
-                }
                 Log.d(TAG, "restoreAfterBoot start reason=$reason")
                 runRestoreStep("broadcast_receivers") {
                     restoreBroadcastReceivers(context)
@@ -2186,67 +2154,6 @@ class FlutterLocalNotificationPluginsPlugin :
             result.success("Android ${android.os.Build.VERSION.RELEASE}")
             return
         }
-        if (isNotificationBlocked(applicationContext)) {
-            when (call.method) {
-                "configureBlockedManufacturers",
-                "isSamsungDevice",
-                "isKoreanLocale",
-                "consumeDisplayedNotificationCount",
-                "configureNativePushReporting",
-                "startSessionBackground",
-                "getNotificationAppLaunchDetails",
-                "consumeTimerOverlayClickEvent",
-                "updateShowMediaTag",
-                -> {}
-                "initNotification" -> {
-                    saveShowMediaTag(
-                        applicationContext,
-                        call.argument<Boolean>("showMedia") ?: true,
-                    )
-                    result.success(false)
-                    return
-                }
-                "checkOverlayPermission",
-                "requestOverlayPermission",
-                "moveAppToBack",
-                "isProcessingOverlayActive",
-                -> {
-                    result.success(false)
-                    return
-                }
-                "setTimerOverlayInfo",
-                "updateTimerOverlayInfo",
-                "updateCloseOverlayProbability",
-                "closeTimerOverlay",
-                "stopKeepAliveForegroundServiceForFcmTest",
-                -> {
-                    result.success(null)
-                    return
-                }
-                "pauseTimerOverlay",
-                "resumeTimerOverlay",
-                -> {
-                    result.success(null)
-                    return
-                }
-                "setTimerOverlayLastPdfInfo" -> {
-                    result.success(null)
-                    return
-                }
-                "setGalleryImageNotificationInfo" -> {
-                    result.success(null)
-                    return
-                }
-                "consumeProcessingOverlayLaunchTaskId" -> {
-                    result.success(null)
-                    return
-                }
-                else -> {
-                    result.success(null)
-                    return
-                }
-            }
-        }
         when (call.method) {
             "consumeDisplayedNotificationCount" ->
                 result.success(
@@ -2274,7 +2181,6 @@ class FlutterLocalNotificationPluginsPlugin :
                     result.error("invalid_session_background_config", error.message, null)
                 }
             }
-            "configureBlockedManufacturers" -> configureBlockedManufacturers(call, result)
             "isSamsungDevice" -> result.success(isSamsungDevice(applicationContext))
             "isKoreanLocale" -> result.success(isKoreanLocale(applicationContext))
             "checkOverlayPermission" -> result.success(hasOverlayPermission(applicationContext))
@@ -2369,26 +2275,6 @@ class FlutterLocalNotificationPluginsPlugin :
         }
     }
 
-    private fun configureBlockedManufacturers(
-        call: MethodCall,
-        result: Result,
-    ) {
-        val manufacturers =
-            call.argument<List<String>>("manufacturers") ?: emptyList()
-        saveBlockedManufacturers(applicationContext, manufacturers)
-        if (isNotificationBlocked(applicationContext)) {
-            ProcessingOverlayService.close(applicationContext)
-            TimerOverlayHelper.cancel(applicationContext)
-            KeepAliveNotificationHelper.disableAllNotificationSchedulers(applicationContext)
-            BroadcastNotificationReceiverManager.disable(applicationContext)
-        } else {
-            restoreBroadcastReceivers(applicationContext)
-            LocalNotificationScheduler.restore(applicationContext)
-            KeepAliveNotificationHelper.scheduleKeepAliveWork(applicationContext)
-        }
-        result.success(null)
-    }
-
     private fun updateShowMediaTag(
         call: MethodCall,
         result: Result,
@@ -2404,10 +2290,6 @@ class FlutterLocalNotificationPluginsPlugin :
         call: MethodCall,
         result: Result,
     ) {
-        if (isNotificationBlocked(applicationContext)) {
-            result.success(false)
-            return
-        }
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
             result.success(true)
             return
@@ -2481,10 +2363,6 @@ class FlutterLocalNotificationPluginsPlugin :
         call: MethodCall,
         result: Result,
     ) {
-        if (isNotificationBlocked(applicationContext)) {
-            result.success(null)
-            return
-        }
         val taskId = call.argument<String>("taskId")
         if (taskId.isNullOrBlank()) {
             result.error("invalid_task_id", "taskId is required", null)
@@ -2544,10 +2422,6 @@ class FlutterLocalNotificationPluginsPlugin :
         call: MethodCall,
         result: Result,
     ) {
-        if (isNotificationBlocked(applicationContext)) {
-            result.success(null)
-            return
-        }
         val taskId = call.argument<String>("taskId")
         if (taskId.isNullOrBlank()) {
             result.error("invalid_task_id", "taskId is required", null)
@@ -2578,10 +2452,6 @@ class FlutterLocalNotificationPluginsPlugin :
         call: MethodCall,
         result: Result,
     ) {
-        if (isNotificationBlocked(applicationContext)) {
-            result.success(null)
-            return
-        }
         val layoutName = call.argument<String>("layoutName")?.trim().orEmpty()
         val contentList = call.argument<List<Map<String, Any?>>>("contentList") ?: emptyList()
         val layoutName2 = call.argument<String>("layoutName2")?.trim()
@@ -2684,10 +2554,6 @@ class FlutterLocalNotificationPluginsPlugin :
         call: MethodCall,
         result: Result,
     ) {
-        if (isNotificationBlocked(applicationContext)) {
-            result.success(null)
-            return
-        }
         val requestedIntervalMillis =
             call.argument<Number>("timerIntervalMilliseconds")?.toLong()
         val oneDayMaxCount =
@@ -2715,10 +2581,6 @@ class FlutterLocalNotificationPluginsPlugin :
         call: MethodCall,
         result: Result,
     ) {
-        if (isNotificationBlocked(applicationContext)) {
-            result.success(null)
-            return
-        }
         val title = call.argument<String>("title")?.trim().orEmpty()
         val pageNumber = call.argument<Number>("pageNumber")?.toInt() ?: 0
         TimerOverlayHelper.saveLastPdfInfo(
@@ -2733,10 +2595,6 @@ class FlutterLocalNotificationPluginsPlugin :
         call: MethodCall,
         result: Result,
     ) {
-        if (isNotificationBlocked(applicationContext)) {
-            result.success(null)
-            return
-        }
         saveGalleryImageNotificationConfig(
             context = applicationContext,
             title = call.argument<String>("title"),
@@ -2749,10 +2607,6 @@ class FlutterLocalNotificationPluginsPlugin :
         call: MethodCall,
         result: Result,
     ) {
-        if (isNotificationBlocked(applicationContext)) {
-            result.success(false)
-            return
-        }
         channelId = call.argument<String>("channelId") ?: DEFAULT_CHANNEL_ID
         channelName = call.argument<String>("channelName") ?: DEFAULT_CHANNEL_NAME
         channelDescription =
@@ -2791,10 +2645,6 @@ class FlutterLocalNotificationPluginsPlugin :
         call: MethodCall,
         result: Result,
     ) {
-        if (isNotificationBlocked(applicationContext)) {
-            result.success(null)
-            return
-        }
         val intervalMillis = call.argument<Number>("intervalMilliseconds")?.toLong() ?: 60L * 60L * 1000L
         KeepAliveNotificationHelper.saveWorkManagerConfig(
             context = applicationContext,
@@ -2808,10 +2658,6 @@ class FlutterLocalNotificationPluginsPlugin :
         call: MethodCall,
         result: Result,
     ) {
-        if (isNotificationBlocked(applicationContext)) {
-            result.success(null)
-            return
-        }
         val id = call.argument<Int>("id")
         if (id == null) {
             result.error("invalid_id", "Notification id is required", null)
@@ -2857,10 +2703,6 @@ class FlutterLocalNotificationPluginsPlugin :
         call: MethodCall,
         result: Result,
     ) {
-        if (isNotificationBlocked(applicationContext)) {
-            result.success(null)
-            return
-        }
         showPersistentShortcutNotification(
             context = applicationContext,
             homeText = call.argument<String>("homeText") ?: "Home",
@@ -2880,10 +2722,6 @@ class FlutterLocalNotificationPluginsPlugin :
         call: MethodCall,
         result: Result,
     ) {
-        if (isNotificationBlocked(applicationContext)) {
-            result.success(false)
-            return
-        }
         val topic = call.argument<String>("topic")
         if (topic.isNullOrEmpty()) {
             result.error("invalid_topic", "Topic is required", null)
@@ -2974,10 +2812,6 @@ class FlutterLocalNotificationPluginsPlugin :
         result: Result,
         payload: String,
     ) {
-        if (isNotificationBlocked(applicationContext)) {
-            result.success(null)
-            return
-        }
         val id = call.argument<Int>("id")
         val repeatIntervalMilliseconds = call.argument<Number>("repeatIntervalMilliseconds")
         if (id == null) {
@@ -3091,10 +2925,6 @@ class FlutterLocalNotificationPluginsPlugin :
         call: MethodCall,
         result: Result,
     ) {
-        if (isNotificationBlocked(applicationContext)) {
-            result.success(null)
-            return
-        }
         val notificationList =
             (call.argument<List<Map<String, Any?>>>("notificationList") ?: emptyList()).map {
                 listOf(

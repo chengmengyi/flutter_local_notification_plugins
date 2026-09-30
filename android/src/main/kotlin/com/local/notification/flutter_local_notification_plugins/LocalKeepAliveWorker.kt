@@ -15,10 +15,6 @@ class LocalKeepAliveWorker(
 
     override fun doWork(): Result {
         Log.d(TAG, "doWork start")
-        if (FlutterLocalNotificationPluginsPlugin.isNotificationBlocked(applicationContext)) {
-            Log.d(TAG, "doWork blocked by manufacturer")
-            return Result.success()
-        }
         return try {
             KeepAliveNotificationHelper.ensureForegroundServiceAlive(
                 applicationContext,

@@ -245,15 +245,6 @@ abstract class FlutterLocalNotificationPluginsPlatform
     throw UnimplementedError('moveAppToBack() has not been implemented.');
   }
 
-  /// 配置需要屏蔽通知的手机品牌列表。
-  Future<void> configureBlockedManufacturers({
-    required List<String> manufacturers,
-  }) {
-    throw UnimplementedError(
-      'configureBlockedManufacturers() has not been implemented.',
-    );
-  }
-
   /// 判断当前手机是否为三星。
   Future<bool> isSamsungDevice() {
     throw UnimplementedError('isSamsungDevice() has not been implemented.');
