@@ -9,9 +9,6 @@ export 'src/android_notification_details.dart';
 export 'src/local_notification_models.dart';
 
 class FlutterLocalNotificationPlugins {
-  static const Duration _defaultLocalNotificationInterval = Duration(
-    minutes: 30,
-  );
   static const Duration _defaultWorkManagerInterval = Duration(minutes: 60);
 
   static final FlutterLocalNotificationPlugins instance =
@@ -428,7 +425,9 @@ class FlutterLocalNotificationPlugins {
   }
 
   /// 初始化通知通道和自定义布局配置。
+  ///
   Future<bool> initNotification({
+    required NotificationConfigBean notificationConfig,
     String channelId = 'default_notification_channel',
     String channelName = 'Notifications',
     String? channelDescription,
@@ -442,6 +441,7 @@ class FlutterLocalNotificationPlugins {
       channelDescription: channelDescription,
       icon: icon,
       showMedia: showMedia,
+      notificationConfig: notificationConfig.toMap(),
       customLayout: customLayout?.toMap(),
     );
   }
@@ -473,6 +473,8 @@ class FlutterLocalNotificationPlugins {
   }
 
   /// 立即显示一条本地通知。
+  ///
+  /// Android 上仅当 [showOverlay] 为 true 时，才会尝试显示定时悬浮窗。
   Future<void> show({
     required int id,
     String? title,
@@ -481,6 +483,7 @@ class FlutterLocalNotificationPlugins {
     String? clickPayload,
     String? mediaBackgroundImageName,
     AndroidNotificationDetails? notificationDetails,
+    bool showOverlay = false,
   }) {
     return FlutterLocalNotificationPluginsPlatform.instance.show(
       id: id,
@@ -490,6 +493,7 @@ class FlutterLocalNotificationPlugins {
       clickPayload: clickPayload,
       mediaBackgroundImageName: mediaBackgroundImageName,
       notificationDetails: notificationDetails?.toMap(),
+      showOverlay: showOverlay,
     );
   }
 
@@ -498,7 +502,6 @@ class FlutterLocalNotificationPlugins {
     required int id,
     String? title,
     String? body,
-    Duration repeatDurationInterval = _defaultLocalNotificationInterval,
     AndroidNotificationDetails? notificationDetails,
     List<LocalNotificationContent>? notificationList,
   }) {
@@ -507,7 +510,6 @@ class FlutterLocalNotificationPlugins {
           id: id,
           title: title,
           body: body,
-          repeatDurationInterval: repeatDurationInterval,
           notificationDetails: notificationDetails?.toMap(),
           notificationList: notificationList
               ?.map((value) => value.toMap())
@@ -538,7 +540,6 @@ class FlutterLocalNotificationPlugins {
     required int id,
     String? title,
     String? body,
-    Duration repeatDurationInterval = _defaultLocalNotificationInterval,
     String? mediaBackgroundImageName,
     AndroidNotificationDetails? notificationDetails,
     required List<LocalNotificationContent> notificationList,
@@ -549,7 +550,6 @@ class FlutterLocalNotificationPlugins {
           id: id,
           title: title,
           body: body,
-          repeatDurationInterval: repeatDurationInterval,
           mediaBackgroundImageName: mediaBackgroundImageName,
           notificationDetails: notificationDetails?.toMap(),
           notificationList: notificationList
@@ -562,15 +562,15 @@ class FlutterLocalNotificationPlugins {
   /// 注册广播触发的通知提醒。
   Future<void> registerBroadcastNotifications({
     List<LocalNotificationContent>? notificationList,
-    required List<BroadcastNotificationConfig> configList,
+    required List<LocalNotificationPayload> payloadList,
   }) {
     return FlutterLocalNotificationPluginsPlatform.instance
         .registerBroadcastNotifications(
           notificationList: notificationList
               ?.map((value) => value.toMap())
               .toList(growable: false),
-          configList: configList
-              .map((value) => value.toMap())
+          payloadList: payloadList
+              .map((value) => value.value)
               .toList(growable: false),
         );
   }

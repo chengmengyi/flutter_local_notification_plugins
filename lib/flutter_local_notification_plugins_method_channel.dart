@@ -387,6 +387,7 @@ class MethodChannelFlutterLocalNotificationPlugins
   /// 通过原生通道初始化通知配置。
   @override
   Future<bool> initNotification({
+    required Map<String, Object?> notificationConfig,
     String channelId = 'default_notification_channel',
     String channelName = 'Notifications',
     String? channelDescription,
@@ -400,6 +401,7 @@ class MethodChannelFlutterLocalNotificationPlugins
       'channelDescription': channelDescription,
       'icon': icon,
       'showMedia': showMedia,
+      'notificationConfig': notificationConfig,
       'customLayout': customLayout,
     });
     return result ?? false;
@@ -442,6 +444,7 @@ class MethodChannelFlutterLocalNotificationPlugins
     String? clickPayload,
     String? mediaBackgroundImageName,
     Map<String, Object?>? notificationDetails,
+    bool showOverlay = false,
   }) {
     return methodChannel.invokeMethod<void>('show', {
       'id': id,
@@ -451,6 +454,7 @@ class MethodChannelFlutterLocalNotificationPlugins
       'clickPayload': clickPayload,
       'mediaBackgroundImageName': mediaBackgroundImageName,
       'notificationDetails': notificationDetails,
+      'showOverlay': showOverlay,
     });
   }
 
@@ -460,7 +464,6 @@ class MethodChannelFlutterLocalNotificationPlugins
     required int id,
     String? title,
     String? body,
-    Duration repeatDurationInterval = const Duration(minutes: 30),
     Map<String, Object?>? notificationDetails,
     List<Map<String, Object?>>? notificationList,
   }) {
@@ -469,7 +472,6 @@ class MethodChannelFlutterLocalNotificationPlugins
           'id': id,
           'title': title,
           'body': body,
-          'repeatIntervalMilliseconds': repeatDurationInterval.inMilliseconds,
           'notificationDetails': notificationDetails,
           'notificationList': notificationList,
         });
@@ -481,7 +483,6 @@ class MethodChannelFlutterLocalNotificationPlugins
     required int id,
     String? title,
     String? body,
-    Duration repeatDurationInterval = const Duration(minutes: 30),
     String? mediaBackgroundImageName,
     Map<String, Object?>? notificationDetails,
     required List<Map<String, Object?>> notificationList,
@@ -493,7 +494,6 @@ class MethodChannelFlutterLocalNotificationPlugins
           'title': title,
           'body': body,
           'mediaBackgroundImageName': mediaBackgroundImageName,
-          'repeatIntervalMilliseconds': repeatDurationInterval.inMilliseconds,
           'notificationDetails': notificationDetails,
           'notificationList': notificationList,
           'reflectionConfig': reflectionConfig,
@@ -504,11 +504,11 @@ class MethodChannelFlutterLocalNotificationPlugins
   @override
   Future<void> registerBroadcastNotifications({
     List<Map<String, Object?>>? notificationList,
-    required List<Map<String, Object?>> configList,
+    required List<String> payloadList,
   }) {
     return methodChannel.invokeMethod<void>('registerBroadcastNotifications', {
       'notificationList': notificationList,
-      'configList': configList,
+      'payloadList': payloadList,
     });
   }
 

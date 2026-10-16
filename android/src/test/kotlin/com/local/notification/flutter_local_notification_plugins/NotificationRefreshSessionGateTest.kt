@@ -7,8 +7,8 @@ import kotlin.test.assertTrue
 internal class NotificationRefreshSessionGateTest {
     @Test
     fun claim_acceptsOnlyTheCurrentTokenInOrder() {
-        val gate = NotificationRefreshSessionGate(refreshCount = 4)
-        gate.start("current")
+        val gate = NotificationRefreshSessionGate()
+        gate.start("current", 4)
 
         assertFalse(gate.claim("other", 1))
         assertFalse(gate.claim("current", 2))
@@ -21,9 +21,9 @@ internal class NotificationRefreshSessionGateTest {
 
     @Test
     fun start_invalidatesThePreviousSession() {
-        val gate = NotificationRefreshSessionGate(refreshCount = 4)
-        gate.start("first")
-        gate.start("second")
+        val gate = NotificationRefreshSessionGate()
+        gate.start("first", 4)
+        gate.start("second", 2)
 
         assertFalse(gate.isCurrent("first"))
         assertFalse(gate.claim("first", 1))
@@ -33,14 +33,14 @@ internal class NotificationRefreshSessionGateTest {
 
     @Test
     fun finishAndCancel_clearTheCurrentSession() {
-        val gate = NotificationRefreshSessionGate(refreshCount = 4)
-        gate.start("first")
+        val gate = NotificationRefreshSessionGate()
+        gate.start("first", 4)
 
         assertFalse(gate.finish("other"))
         assertTrue(gate.finish("first"))
         assertFalse(gate.isCurrent("first"))
 
-        gate.start("second")
+        gate.start("second", 4)
         assertTrue(gate.cancel())
         assertFalse(gate.cancel())
         assertFalse(gate.isCurrent("second"))

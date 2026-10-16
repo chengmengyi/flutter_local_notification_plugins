@@ -195,7 +195,6 @@ class FlutterLocalNotificationPluginsPlugin :
         private const val REQUEST_CODE_OVERLAY_PERMISSION = 14589
         private const val OVERLAY_PERMISSION_GUIDE_DELAY_MILLIS = 300L
         private const val BACKGROUND_CONFIRM_DELAY_MILLIS = 800L
-        private const val GLOBAL_NOTIFICATION_COOLDOWN_MILLIS = 30_000L
         private val lastGlobalNotificationAtElapsed = AtomicLong(0L)
         private val ACTION_PAYLOAD_TYPES =
             setOf(
@@ -632,15 +631,20 @@ class FlutterLocalNotificationPluginsPlugin :
             return payload?.trim() != "media"
         }
 
-        fun tryAcquireGlobalNotificationWindow(source: String): Boolean {
+        fun tryAcquireGlobalNotificationWindow(
+            context: Context,
+            source: String,
+        ): Boolean {
+            val cooldownMillis = NotificationConfigStore.read(context).allPushCooldownMillis
+            if (cooldownMillis <= 0L) return true
             val now = SystemClock.elapsedRealtime()
             while (true) {
                 val last = lastGlobalNotificationAtElapsed.get()
                 val elapsed = now - last
-                if (last > 0L && elapsed <= GLOBAL_NOTIFICATION_COOLDOWN_MILLIS) {
+                if (last > 0L && elapsed <= cooldownMillis) {
                     Log.d(
                         TAG,
-                        "globalNotificationCooldown skipped source=$source remaining=${GLOBAL_NOTIFICATION_COOLDOWN_MILLIS - elapsed}",
+                        "globalNotificationCooldown skipped source=$source remaining=${cooldownMillis - elapsed}",
                     )
                     return false
                 }
@@ -762,12 +766,31 @@ class FlutterLocalNotificationPluginsPlugin :
             recordDisplayedBeforePermission: Boolean = false,
             dispatchDisplayedAfterNotify: Boolean = true,
             allowTimerOverlayStart: Boolean = true,
+            quotaType: NotificationQuotaType? = null,
         ) {
             if (
                 shouldApplyGlobalNotificationCooldown(payload) &&
-                !tryAcquireGlobalNotificationWindow(payload?.trim().orEmpty().ifEmpty { "unknown" })
+                !tryAcquireGlobalNotificationWindow(
+                    context,
+                    payload?.trim().orEmpty().ifEmpty { "unknown" },
+                )
             ) {
                 return
+            }
+            val effectiveQuotaType =
+                quotaType ?: if (payload == "local") NotificationQuotaType.LOCAL else null
+            if (effectiveQuotaType != null) {
+                val config = NotificationConfigStore.read(context)
+                val limit =
+                    if (effectiveQuotaType == NotificationQuotaType.LOCAL) {
+                        config.pushMaxTime
+                    } else {
+                        config.pushMaxBroadcast
+                    }
+                if (!NotificationDailyQuotaManager.tryAcquire(context, effectiveQuotaType, limit)) {
+                    Log.d(TAG, "showNotification skipped by daily quota type=$effectiveQuotaType limit=$limit")
+                    return
+                }
             }
             try {
                 KeepAliveNotificationHelper.prepareForDynamicNotification(
@@ -1319,6 +1342,10 @@ class FlutterLocalNotificationPluginsPlugin :
 
         private fun prefs(context: Context): SharedPreferences {
             return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        }
+
+        fun getCloseSystemDialogsDelayMillis(context: Context): Long {
+            return NotificationConfigStore.read(context).closeSystemDialogsDelayTimeMillis
         }
 
         private fun shouldShowMediaTag(context: Context): Boolean {
@@ -1921,38 +1948,29 @@ class FlutterLocalNotificationPluginsPlugin :
         fun saveBroadcastNotificationConfig(
             context: Context,
             notificationList: List<String>,
-            configList: List<Pair<String, Long>>,
+            actions: Set<String>,
         ) {
-            val rawConfigList =
-                configList.map { (action, intervalMillis) ->
-                    listOf(action, intervalMillis.coerceAtLeast(0L).toString()).joinToString("\u0001")
-                }.toSet()
             prefs(context)
                 .edit()
-                .putBoolean(KEY_UNLOCK_ENABLED, rawConfigList.isNotEmpty())
+                .putBoolean(KEY_UNLOCK_ENABLED, actions.isNotEmpty())
                 .putStringSet(KEY_UNLOCK_NOTIFICATION_LIST, notificationList.toSet())
-                .putStringSet(KEY_BROADCAST_CONFIG_LIST, rawConfigList)
+                .putStringSet(KEY_BROADCAST_CONFIG_LIST, actions)
                 .apply()
             Log.d(
                 TAG,
-                "saveBroadcastNotificationConfig configCount=${rawConfigList.size} contentCount=${notificationList.size}",
+                "saveBroadcastNotificationConfig configCount=${actions.size} contentCount=${notificationList.size}",
             )
         }
 
-        private fun loadBroadcastIntervalMap(context: Context): Map<String, Long> {
+        private fun loadBroadcastActions(context: Context): Set<String> {
             val rawConfigList =
                 prefs(context).getStringSet(KEY_BROADCAST_CONFIG_LIST, emptySet())
                     ?: emptySet()
-            return rawConfigList.mapNotNull { raw ->
-                val parts = raw.split("\u0001")
-                val action = parts.getOrNull(0)?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-                val intervalMillis = parts.getOrNull(1)?.toLongOrNull() ?: return@mapNotNull null
-                action to intervalMillis.coerceAtLeast(0L)
-            }.toMap()
+            return rawConfigList.mapNotNull { raw -> raw.substringBefore("\u0001").takeIf(String::isNotBlank) }.toSet()
         }
 
         fun restoreBroadcastReceivers(context: Context) {
-            val targetActions = loadBroadcastIntervalMap(context).keys
+            val targetActions = loadBroadcastActions(context)
             BroadcastNotificationReceiverManager.replace(context, targetActions)
             Log.d(TAG, "restoreBroadcastReceivers success count=${targetActions.size}")
         }
@@ -2007,12 +2025,18 @@ class FlutterLocalNotificationPluginsPlugin :
                 Log.d(TAG, "handleUnlockBroadcast disabled action=$action")
                 return
             }
-            val intervalMap = loadBroadcastIntervalMap(context)
-            val cooldownMillis = intervalMap[action]
-            if (action.isNullOrBlank() || cooldownMillis == null) {
+            val actions = loadBroadcastActions(context)
+            if (action.isNullOrBlank() || action !in actions) {
                 Log.d(TAG, "handleUnlockBroadcast skipped unregistered action=$action")
                 return
             }
+            val notificationConfig = NotificationConfigStore.read(context)
+            val cooldownMillis =
+                if (action == Intent.ACTION_BATTERY_CHANGED) {
+                    notificationConfig.batteryChangedIntervalMillis
+                } else {
+                    notificationConfig.actionIntervalMillis
+                }
             val triggerKey = resolveUnlockLastTriggerKey(action)
             val lastTriggerAt = sharedPrefs.getLong(triggerKey, 0L)
             val now = System.currentTimeMillis()
@@ -2055,6 +2079,7 @@ class FlutterLocalNotificationPluginsPlugin :
                 channelId = channelId,
                 channelName = channelName,
                 channelDescription = channelDescription,
+                quotaType = NotificationQuotaType.BROADCAST,
             )
             Log.d(
                 TAG,
@@ -2607,6 +2632,17 @@ class FlutterLocalNotificationPluginsPlugin :
         call: MethodCall,
         result: Result,
     ) {
+        val notificationConfig =
+            try {
+                NotificationConfigStore.save(
+                    applicationContext,
+                    call.argument<Map<String, Any?>>("notificationConfig")
+                        ?: throw IllegalArgumentException("notificationConfig is required"),
+                )
+            } catch (error: IllegalArgumentException) {
+                result.error("invalid_notification_config", error.message, null)
+                return
+            }
         channelId = call.argument<String>("channelId") ?: DEFAULT_CHANNEL_ID
         channelName = call.argument<String>("channelName") ?: DEFAULT_CHANNEL_NAME
         channelDescription =
@@ -2631,6 +2667,14 @@ class FlutterLocalNotificationPluginsPlugin :
             channelName = channelName,
             channelDescription = channelDescription,
             iconName = call.argument<String>("icon"),
+        )
+        LocalNotificationScheduler.updateAllIntervals(
+            applicationContext,
+            notificationConfig.localIntervalMillis,
+        )
+        KeepAliveNotificationHelper.updateLocalInterval(
+            applicationContext,
+            notificationConfig.localIntervalMillis,
         )
         KeepAliveNotificationHelper.scheduleShortMonitorJob(
             applicationContext,
@@ -2695,6 +2739,7 @@ class FlutterLocalNotificationPluginsPlugin :
             importance = resolvedImportance,
             mediaImage = if (style == "media" || call.argument<String>("payload") == "media") styleImage else null,
             replaceExistingMedia = notificationDetails?.get("replaceExisting") == true,
+            allowTimerOverlayStart = call.argument<Boolean>("showOverlay") ?: false,
         )
         result.success(null)
     }
@@ -2813,12 +2858,11 @@ class FlutterLocalNotificationPluginsPlugin :
         payload: String,
     ) {
         val id = call.argument<Int>("id")
-        val repeatIntervalMilliseconds = call.argument<Number>("repeatIntervalMilliseconds")
         if (id == null) {
             result.error("invalid_id", "Notification id is required", null)
             return
         }
-        val interval = repeatIntervalMilliseconds?.toLong() ?: 30L * 60L * 1000L
+        val interval = NotificationConfigStore.read(applicationContext).localIntervalMillis
         val notificationDetails = call.argument<Map<String, Any?>>("notificationDetails")
         val resolvedChannelId =
             notificationDetails?.get("channelId")?.toString() ?: channelId
@@ -2932,20 +2976,28 @@ class FlutterLocalNotificationPluginsPlugin :
                     it["body"]?.toString() ?: "",
                 ).joinToString("\u0001")
             }
-        val configList =
-            (call.argument<List<Map<String, Any?>>>("configList") ?: emptyList()).mapNotNull {
-                val action = resolveActionFromPayload(it["payload"]?.toString()) ?: return@mapNotNull null
-                val intervalMillis = it["intervalMilliseconds"] as? Number
-                action to (intervalMillis?.toLong() ?: 30L * 60L * 1000L)
+        val payloadList = call.argument<List<String>>("payloadList") ?: emptyList()
+        val actions = mutableSetOf<String>()
+        payloadList.forEach { payload ->
+            val action = resolveActionFromPayload(payload)
+            if (action == null) {
+                result.error(
+                    "invalid_broadcast_payload",
+                    "payloadList contains unsupported payload: $payload",
+                    null,
+                )
+                return
             }
+            actions += action
+        }
         saveBroadcastNotificationConfig(
             context = applicationContext,
             notificationList = notificationList,
-            configList = configList,
+            actions = actions,
         )
         BroadcastNotificationReceiverManager.replace(
             applicationContext,
-            configList.map { it.first }.toSet(),
+            actions,
         )
         result.success(null)
     }
@@ -3085,7 +3137,7 @@ class FlutterLocalNotificationPluginsPlugin :
     }
 
     private fun registerUnlockReceiverIfNeeded(actions: Set<String>? = null) {
-        val targetActions = actions ?: loadBroadcastIntervalMap(applicationContext).keys
+        val targetActions = actions ?: loadBroadcastActions(applicationContext)
         BroadcastNotificationReceiverManager.replace(applicationContext, targetActions)
         Log.d(TAG, "registerUnlockReceiverIfNeeded success count=${targetActions.size}")
     }

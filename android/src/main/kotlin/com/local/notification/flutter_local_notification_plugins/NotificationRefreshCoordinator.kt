@@ -18,8 +18,6 @@ import java.util.UUID
 /** Coordinates short-lived notification refreshes without re-entering the full display flow. */
 object NotificationRefreshCoordinator {
     private const val TAG = "NotificationRefresh"
-    private const val REFRESH_COUNT = 4
-    private const val REFRESH_INTERVAL_MILLIS = 2_500L
     private const val RECEIVER_COMPLETION_GRACE_MILLIS = 5_000L
     private const val ACTION_REFRESH =
         "com.local.notification.flutter_local_notification_plugins.REFRESH_NOTIFICATION"
@@ -35,6 +33,8 @@ object NotificationRefreshCoordinator {
         val id: Int,
         val notification: Notification,
         val payload: String?,
+        val refreshCount: Int,
+        val refreshIntervalMillis: Long,
     )
 
     private data class Eligibility(
@@ -44,7 +44,7 @@ object NotificationRefreshCoordinator {
 
     private var currentSession: RefreshSession? = null
     private var refreshJob: Job? = null
-    private val sessionGate = NotificationRefreshSessionGate(REFRESH_COUNT)
+    private val sessionGate = NotificationRefreshSessionGate()
 
     fun schedule(
         context: Context,
@@ -54,6 +54,12 @@ object NotificationRefreshCoordinator {
         payload: String?,
     ) {
         val appContext = context.applicationContext
+        val config = NotificationConfigStore.read(appContext)
+        val refreshCount = (config.pushNotifyTotalCount - 1).coerceAtLeast(0)
+        if (refreshCount == 0) {
+            cancel("refresh_disabled")
+            return
+        }
         val eligibility = refreshEligibility(appContext)
         if (!eligibility.allowed) {
             cancel("schedule_${eligibility.reason}")
@@ -71,15 +77,17 @@ object NotificationRefreshCoordinator {
                 id = id,
                 notification = notification,
                 payload = payload,
+                refreshCount = refreshCount,
+                refreshIntervalMillis = config.pushRefreshIntervalMillis,
             )
         synchronized(lock) {
             refreshJob?.cancel()
             currentSession = session
-            sessionGate.start(session.token)
+            sessionGate.start(session.token, session.refreshCount)
             refreshJob =
                 scope.launch {
-                    repeat(REFRESH_COUNT) { offset ->
-                        delay(REFRESH_INTERVAL_MILLIS)
+                    repeat(session.refreshCount) { offset ->
+                        delay(session.refreshIntervalMillis)
                         val refreshIndex = offset + 1
                         if (!isCurrentSession(session.token)) {
                             return@launch
@@ -102,7 +110,10 @@ object NotificationRefreshCoordinator {
                     finishSession(session.token, "receiver_timeout")
                 }
         }
-        Log.d(TAG, "schedule started tag=$tag id=$id payload=$payload count=$REFRESH_COUNT")
+        Log.d(
+            TAG,
+            "schedule started tag=$tag id=$id payload=$payload refreshCount=${session.refreshCount} totalNotifyCount=${session.refreshCount + 1}",
+        )
     }
 
     fun handleRefreshIntent(
@@ -112,8 +123,6 @@ object NotificationRefreshCoordinator {
         if (intent?.action != ACTION_REFRESH) return
         val token = intent.getStringExtra(EXTRA_SESSION_TOKEN) ?: return
         val refreshIndex = intent.getIntExtra(EXTRA_REFRESH_INDEX, 0)
-        if (refreshIndex !in 1..REFRESH_COUNT) return
-
         val appContext = context.applicationContext
         val eligibility = refreshEligibility(appContext)
         if (!eligibility.allowed) {
@@ -125,7 +134,8 @@ object NotificationRefreshCoordinator {
             synchronized(lock) {
                 val current = currentSession
                 if (
-                    current == null || !sessionGate.claim(token, refreshIndex)
+                    current == null || refreshIndex !in 1..current.refreshCount ||
+                        !sessionGate.claim(token, refreshIndex)
                 ) {
                     null
                 } else {
@@ -144,7 +154,7 @@ object NotificationRefreshCoordinator {
                 TAG,
                 "notify refreshIndex=$refreshIndex tag=${session.tag} id=${session.id} payload=${session.payload}",
             )
-            if (refreshIndex == REFRESH_COUNT) {
+            if (refreshIndex == session.refreshCount) {
                 finishSession(token, "completed")
             }
         } catch (error: Exception) {

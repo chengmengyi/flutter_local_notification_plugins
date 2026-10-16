@@ -206,6 +206,15 @@ object KeepAliveNotificationHelper {
         )
     }
 
+    fun updateLocalInterval(
+        context: Context,
+        intervalMillis: Long,
+    ) {
+        val sharedPrefs = prefs(context)
+        if (!sharedPrefs.getBoolean(KEY_LOCAL_ENABLED, false)) return
+        sharedPrefs.edit().putLong(KEY_LOCAL_INTERVAL_MILLIS, intervalMillis).apply()
+    }
+
     fun saveWorkManagerConfig(
         context: Context,
         intervalMillis: Long,
@@ -706,8 +715,19 @@ object KeepAliveNotificationHelper {
         val title = parts.getOrNull(0)
         val body = parts.getOrNull(1)
         val payload = PAYLOAD_LOCAL
-        if (!FlutterLocalNotificationPluginsPlugin.tryAcquireGlobalNotificationWindow("$payload:$source")) {
+        if (!FlutterLocalNotificationPluginsPlugin.tryAcquireGlobalNotificationWindow(context, "$payload:$source")) {
             Log.d(TAG, "showStoredLocalNotification skipped by global cooldown source=$source")
+            return false
+        }
+        val dailyLimit = NotificationConfigStore.read(context).pushMaxTime
+        if (
+            !NotificationDailyQuotaManager.tryAcquire(
+                context,
+                NotificationQuotaType.LOCAL,
+                dailyLimit,
+            )
+        ) {
+            Log.d(TAG, "showStoredLocalNotification skipped by daily quota limit=$dailyLimit")
             return false
         }
         try {

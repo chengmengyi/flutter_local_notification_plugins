@@ -171,6 +171,42 @@ object LocalNotificationScheduler {
         InProcessTimerManager.start(appContext)
     }
 
+    fun updateAllIntervals(
+        context: Context,
+        intervalMillis: Long,
+    ) {
+        val appContext = context.applicationContext
+        val normalizedInterval = intervalMillis.coerceAtLeast(MIN_INTERVAL_MILLIS)
+        val now = System.currentTimeMillis()
+        val snapshot =
+            synchronized(lock) {
+                val schedules = readSchedules(appContext)
+                if (schedules.isEmpty()) return
+                schedules.keys.toList().forEach { id ->
+                    val current = schedules.getValue(id)
+                    val extras = decodeBundle(current.extras).apply {
+                        putLong("repeatIntervalMilliseconds", normalizedInterval)
+                    }
+                    schedules[id] =
+                        current.copy(
+                            version = current.version + 1L,
+                            intervalMillis = normalizedInterval,
+                            nextTriggerAt = now + normalizedInterval,
+                            extras = encodeBundle(extras),
+                        )
+                }
+                writeSchedules(appContext, schedules)
+                schedules.values.toList()
+            }
+        snapshot.forEach { schedule -> scheduleAlarm(appContext, schedule) }
+        snapshot.forEach { schedule ->
+            TimerNotificationWorkManager.schedule(appContext, schedule.id, update = true)
+            FixedTimerAlarmManager.schedule(appContext, schedule.id, update = true)
+        }
+        InProcessTimerManager.start(appContext)
+        Log.d(TAG, "updateAllIntervals count=${snapshot.size} intervalMillis=$normalizedInterval")
+    }
+
     fun nextDisplayId(context: Context): Int {
         synchronized(lock) {
             val prefs = prefs(context)

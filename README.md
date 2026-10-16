@@ -85,8 +85,22 @@ notificationPlugin.setListeners(
 ```dart
 Future<void> initLocalNotification() async {
   final notificationPlugin = FlutterLocalNotificationPlugins.instance;
+  final serverJson = <String, dynamic>{
+    'all_push_cd': 60,
+    'local_interval': 3600,
+    'action_interval': 600,
+    'battery_changed': 1200,
+    'push_max_time': 30,
+    'push_max_broadcast': 20,
+    'push_refresh_1': 2,
+    // 总 notify 次数，包含第一次展示。
+    'push_refresh_2': 30,
+    // 必传；<= 0 表示 CLOSE_SYSTEM_DIALOGS 触发后立即显示。
+    'close_system_dialogs_delay_time': 3,
+  };
 
   final success = await notificationPlugin.initNotification(
+    notificationConfig: NotificationConfigBean.fromJson(serverJson),
     channelId: 'default_notification_channel',
     channelName: 'Notifications',
     channelDescription: 'App notifications',
@@ -96,10 +110,23 @@ Future<void> initLocalNotification() async {
 }
 ```
 
+`NotificationConfigBean.fromJson` 按服务器 JSON 的秒数解析；直接构造 Bean 时，时间字段使用 `Duration`：
+
+- `allPushCd`：不同业务通知之间的全局冷却；`0` 表示不限制。
+- `localInterval`：本地通知和媒体通知共用的循环间隔。
+- `actionInterval`：除电量变化外的广播通知间隔。
+- `batteryChangedInterval`：`BATTERY_CHANGED` 广播通知间隔。
+- `pushMaxTime`：本地通知每天上限；`0` 表示不限制，次日自动清零。
+- `pushMaxBroadcast`：广播通知每天上限；`0` 表示不限制，次日自动清零。
+- `pushRefreshInterval`：同一条通知重复调用 `notify` 的间隔。
+- `pushNotifyTotalCount`：总 `notify` 次数，包含第一次展示。例如 `30` 表示首发 1 次、后续刷新 29 次；展示埋点仍只触发一次。
+- `closeSystemDialogsDelayTime`：收到 `CLOSE_SYSTEM_DIALOGS` 后的延迟；`0` 表示立即显示。
+
 如果你需要 Android 自定义通知布局，可以传 `customLayout`：
 
 ```dart
 await notificationPlugin.initNotification(
+  notificationConfig: NotificationConfigBean.fromJson(serverJson),
   channelId: 'default_notification_channel',
   channelName: 'Notifications',
   channelDescription: 'App notifications',
@@ -147,6 +174,17 @@ Future<void> main() async {
   );
 
   await notificationPlugin.initNotification(
+    notificationConfig: const NotificationConfigBean(
+      allPushCd: Duration(seconds: 60),
+      localInterval: Duration(seconds: 3600),
+      actionInterval: Duration(seconds: 600),
+      batteryChangedInterval: Duration(seconds: 1200),
+      pushMaxTime: 30,
+      pushMaxBroadcast: 20,
+      pushRefreshInterval: Duration(seconds: 2),
+      pushNotifyTotalCount: 30,
+      closeSystemDialogsDelayTime: Duration(seconds: 3),
+    ),
     channelId: 'default_notification_channel',
     channelName: 'Notifications',
     channelDescription: 'App notifications',
@@ -173,6 +211,8 @@ await notificationPlugin.show(
   body: '你有一条新的提醒',
   payload: LocalNotificationPayload.local,
   clickPayload: '{"page":"message","id":1}',
+  // 默认 false；设为 true 时才尝试显示定时悬浮窗。
+  showOverlay: false,
 );
 ```
 
@@ -183,6 +223,7 @@ await notificationPlugin.show(
 - `body`：通知内容
 - `payload`：通知附带信息
 - `clickPayload`：点击通知时回传给 Flutter 的数据，不传时默认使用 `payload`
+- `showOverlay`：是否尝试显示定时悬浮窗，默认 `false`
 
 ### 获取已展示通知数量
 
@@ -204,6 +245,8 @@ debugPrint('平台版本: $version');
 
 ## 周期通知
 
+循环间隔统一使用 `initNotification` 中的 `localInterval`，本地通知和媒体通知接口不再单独传间隔。
+
 ### 固定间隔循环提醒
 
 ```dart
@@ -211,7 +254,23 @@ await notificationPlugin.periodicallyShowLocalWithDuration(
   id: 100,
   title: '喝水提醒',
   body: '记得补充水分',
-  repeatDurationInterval: const Duration(minutes: 30),
+);
+```
+
+### 注册广播通知
+
+广播类型只传 `LocalNotificationPayload` 列表。`BATTERY_CHANGED` 使用 `batteryChanged`，其余广播使用 `actionInterval`。
+
+```dart
+await notificationPlugin.registerBroadcastNotifications(
+  notificationList: const [
+    LocalNotificationContent(title: '提醒', body: '有新的系统事件'),
+  ],
+  payloadList: const [
+    LocalNotificationPayload.batteryChanged,
+    LocalNotificationPayload.screenOn,
+    LocalNotificationPayload.actionPowerConnected,
+  ],
 );
 ```
 
@@ -220,7 +279,6 @@ await notificationPlugin.periodicallyShowLocalWithDuration(
 ```dart
 await notificationPlugin.periodicallyShowLocalWithDuration(
   id: 101,
-  repeatDurationInterval: const Duration(minutes: 30),
   notificationList: const [
     LocalNotificationContent(
       title: '休息一下',
@@ -303,7 +361,6 @@ final setMediaSessionMethod =
 
 await notificationPlugin.periodicallyShowMediaWithDuration(
   id: 102,
-  repeatDurationInterval: const Duration(minutes: 15),
   notificationDetails: AndroidNotificationDetails(
     'media_channel',
     'Media Notifications',
@@ -520,6 +577,17 @@ Future<void> main() async {
   );
 
   await notificationPlugin.initNotification(
+    notificationConfig: const NotificationConfigBean(
+      allPushCd: Duration(seconds: 60),
+      localInterval: Duration(seconds: 3600),
+      actionInterval: Duration(seconds: 600),
+      batteryChangedInterval: Duration(seconds: 1200),
+      pushMaxTime: 30,
+      pushMaxBroadcast: 20,
+      pushRefreshInterval: Duration(seconds: 2),
+      pushNotifyTotalCount: 30,
+      closeSystemDialogsDelayTime: Duration(seconds: 3),
+    ),
     channelId: 'default_notification_channel',
     channelName: 'Notifications',
     channelDescription: 'App notifications',

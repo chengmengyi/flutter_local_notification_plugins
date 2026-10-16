@@ -1,15 +1,19 @@
 package com.local.notification.flutter_local_notification_plugins
 
-internal class NotificationRefreshSessionGate(
-    private val refreshCount: Int,
-) {
+internal class NotificationRefreshSessionGate {
     private var token: String? = null
     private var nextRefreshIndex: Int = 1
+    private var refreshCount: Int = 0
 
     @Synchronized
-    fun start(newToken: String) {
+    fun start(
+        newToken: String,
+        newRefreshCount: Int,
+    ) {
+        require(newRefreshCount > 0)
         token = newToken
         nextRefreshIndex = 1
+        refreshCount = newRefreshCount
     }
 
     @Synchronized
@@ -35,6 +39,7 @@ internal class NotificationRefreshSessionGate(
         if (token != candidateToken) return false
         token = null
         nextRefreshIndex = 1
+        refreshCount = 0
         return true
     }
 
@@ -43,6 +48,7 @@ internal class NotificationRefreshSessionGate(
         val hadSession = token != null
         token = null
         nextRefreshIndex = 1
+        refreshCount = 0
         return hadSession
     }
 }

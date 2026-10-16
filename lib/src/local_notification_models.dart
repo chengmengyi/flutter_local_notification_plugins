@@ -204,19 +204,104 @@ class ProcessingOverlayReflectionConfig {
   };
 }
 
-class BroadcastNotificationConfig {
-  const BroadcastNotificationConfig({
-    required this.payload,
-    required this.interval,
+/// 通知系统的统一动态配置。
+///
+/// 时间字段使用 [Duration]，避免调用方混淆秒和毫秒。
+class NotificationConfigBean {
+  const NotificationConfigBean({
+    required this.allPushCd,
+    required this.localInterval,
+    required this.actionInterval,
+    required this.batteryChangedInterval,
+    required this.pushMaxTime,
+    required this.pushMaxBroadcast,
+    required this.pushRefreshInterval,
+    required this.pushNotifyTotalCount,
+    required this.closeSystemDialogsDelayTime,
   });
 
-  final LocalNotificationPayload payload;
-  final Duration interval;
+  final Duration allPushCd;
+  final Duration localInterval;
+  final Duration actionInterval;
+  final Duration batteryChangedInterval;
+  final int pushMaxTime;
+  final int pushMaxBroadcast;
+  final Duration pushRefreshInterval;
 
-  Map<String, Object?> toMap() => <String, Object?>{
-    'payload': payload.value,
-    'intervalMilliseconds': interval.inMilliseconds,
-  };
+  /// 每条通知总共调用 notify 的次数，包含第一次展示。
+  final int pushNotifyTotalCount;
+  final Duration closeSystemDialogsDelayTime;
+
+  factory NotificationConfigBean.fromJson(Map<String, dynamic> json) {
+    int requiredInt(String key) {
+      final value = json[key];
+      if (value is! num || value.toInt() != value) {
+        throw FormatException('$key must be an integer');
+      }
+      return value.toInt();
+    }
+
+    Duration requiredSeconds(String key) {
+      final value = json[key];
+      if (value is! num || !value.isFinite) {
+        throw FormatException('$key must be a finite number of seconds');
+      }
+      return Duration(milliseconds: (value * 1000).round());
+    }
+
+    return NotificationConfigBean(
+      allPushCd: requiredSeconds('all_push_cd'),
+      localInterval: requiredSeconds('local_interval'),
+      actionInterval: requiredSeconds('action_interval'),
+      batteryChangedInterval: requiredSeconds('battery_changed'),
+      pushMaxTime: requiredInt('push_max_time'),
+      pushMaxBroadcast: requiredInt('push_max_broadcast'),
+      pushRefreshInterval: requiredSeconds('push_refresh_1'),
+      pushNotifyTotalCount: requiredInt('push_refresh_2'),
+      closeSystemDialogsDelayTime:
+          json.containsKey('close_system_dialogs_delay_time')
+          ? requiredSeconds('close_system_dialogs_delay_time')
+          : requiredSeconds('closeSystemDialogsDelayTime'),
+    ).._validate();
+  }
+
+  Map<String, Object?> toMap() {
+    _validate();
+    return <String, Object?>{
+      'allPushCdMilliseconds': allPushCd.inMilliseconds,
+      'localIntervalMilliseconds': localInterval.inMilliseconds,
+      'actionIntervalMilliseconds': actionInterval.inMilliseconds,
+      'batteryChangedIntervalMilliseconds':
+          batteryChangedInterval.inMilliseconds,
+      'pushMaxTime': pushMaxTime,
+      'pushMaxBroadcast': pushMaxBroadcast,
+      'pushRefreshIntervalMilliseconds': pushRefreshInterval.inMilliseconds,
+      'pushNotifyTotalCount': pushNotifyTotalCount,
+      'closeSystemDialogsDelayTimeMilliseconds':
+          closeSystemDialogsDelayTime.inMilliseconds,
+    };
+  }
+
+  void _validate() {
+    if (allPushCd.isNegative ||
+        localInterval <= Duration.zero ||
+        actionInterval.isNegative ||
+        batteryChangedInterval.isNegative ||
+        pushMaxTime < 0 ||
+        pushMaxBroadcast < 0 ||
+        pushRefreshInterval.isNegative ||
+        pushNotifyTotalCount <= 0 ||
+        closeSystemDialogsDelayTime.isNegative) {
+      throw ArgumentError(
+        'NotificationConfigBean contains an invalid negative/zero value',
+      );
+    }
+    if (pushNotifyTotalCount > 1 && pushRefreshInterval <= Duration.zero) {
+      throw ArgumentError(
+        'pushRefreshInterval must be > 0 when pushNotifyTotalCount > 1',
+      );
+    }
+  }
 }
 
 class LocalNotificationEvent {
