@@ -12,6 +12,7 @@ class AndroidCustomNotificationLayout {
     this.actionText,
   });
 
+
   final String smallLayoutName;
   final String bigLayoutName;
   final String? actionText;
