@@ -213,11 +213,12 @@ class FlutterLocalNotificationPluginsPlugin :
         private val DEBUG_PAYLOAD_TYPES = setOf("local", "lock", "fcm", "media") + ACTION_PAYLOAD_TYPES
         private var notificationEventChannel: MethodChannel? = null
         private var mediaSessionCompat: Any? = null
+        private val startedActivityCount = AtomicInteger(0)
         @Volatile
-        private var hostActivityInForeground: Boolean = false
+        private var processingOverlayClickListenerReady: Boolean = false
         private val documentScannerActivityCount = AtomicInteger(0)
 
-        fun isHostActivityInForeground(): Boolean = hostActivityInForeground
+        fun isHostActivityInForeground(): Boolean = startedActivityCount.get() > 0
 
         fun isDocumentScanning(): Boolean = documentScannerActivityCount.get() > 0
 
@@ -250,7 +251,7 @@ class FlutterLocalNotificationPluginsPlugin :
 
         fun bringHostAppToForegroundOrStart(context: Context): Boolean {
             val appContext = context.applicationContext
-            if (hostActivityInForeground) {
+            if (isHostActivityInForeground()) {
                 return true
             }
             if (moveHostTaskToFront(appContext)) {
@@ -631,6 +632,18 @@ class FlutterLocalNotificationPluginsPlugin :
             return payload?.trim() != "media"
         }
 
+        private fun shouldSuppressSourceNotificationInForeground(
+            payload: String?,
+            quotaType: NotificationQuotaType?,
+        ): Boolean {
+            if (!isHostActivityInForeground()) return false
+            val normalizedPayload = payload?.trim()
+            return normalizedPayload == "local" ||
+                normalizedPayload == "fcm" ||
+                quotaType == NotificationQuotaType.BROADCAST ||
+                ACTION_PAYLOAD_TYPES.contains(normalizedPayload)
+        }
+
         fun tryAcquireGlobalNotificationWindow(
             context: Context,
             source: String,
@@ -767,7 +780,18 @@ class FlutterLocalNotificationPluginsPlugin :
             dispatchDisplayedAfterNotify: Boolean = true,
             allowTimerOverlayStart: Boolean = true,
             quotaType: NotificationQuotaType? = null,
+            suppressWhenAppForeground: Boolean = true,
         ) {
+            if (
+                suppressWhenAppForeground &&
+                shouldSuppressSourceNotificationInForeground(payload, quotaType)
+            ) {
+                Log.d(
+                    TAG,
+                    "showNotification skipped appForeground=true payload=$payload quotaType=$quotaType attachedMediaSkipped=true",
+                )
+                return
+            }
             if (
                 shouldApplyGlobalNotificationCooldown(payload) &&
                 !tryAcquireGlobalNotificationWindow(
@@ -1478,6 +1502,9 @@ class FlutterLocalNotificationPluginsPlugin :
 
         fun dispatchProcessingOverlayClicked(context: Context): Boolean {
             val channel = notificationEventChannel ?: return false
+            if (!processingOverlayClickListenerReady) {
+                return false
+            }
             Handler(Looper.getMainLooper()).post {
                 try {
                     channel.invokeMethod("onProcessingOverlayClicked", emptyMap<String, Any?>())
@@ -2030,6 +2057,13 @@ class FlutterLocalNotificationPluginsPlugin :
                 Log.d(TAG, "handleUnlockBroadcast skipped unregistered action=$action")
                 return
             }
+            if (isHostActivityInForeground()) {
+                Log.d(
+                    TAG,
+                    "handleUnlockBroadcast skipped appForeground=true action=$action attachedMediaSkipped=true",
+                )
+                return
+            }
             val notificationConfig = NotificationConfigStore.read(context)
             val cooldownMillis =
                 if (action == Intent.ACTION_BATTERY_CHANGED) {
@@ -2154,7 +2188,6 @@ class FlutterLocalNotificationPluginsPlugin :
     private var channelDescription: String = DEFAULT_CHANNEL_DESCRIPTION
     private var lifecycleCallbacks: Application.ActivityLifecycleCallbacks? = null
     private var lifecycleHandler: Handler? = null
-    private val startedActivityCount = AtomicInteger(0)
     private var pendingBackgroundRunnable: Runnable? = null
 
     override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
@@ -2237,6 +2270,16 @@ class FlutterLocalNotificationPluginsPlugin :
             "isProcessingOverlayActive" -> result.success(ProcessingOverlayService.isRunning)
             "consumeProcessingOverlayLaunchTaskId" ->
                 result.success(ProcessingOverlayService.consumeLaunchTaskId(applicationContext))
+            "setProcessingOverlayClickListenerReady" -> {
+                processingOverlayClickListenerReady = call.argument<Boolean>("ready") == true
+                if (
+                    processingOverlayClickListenerReady &&
+                    ProcessingOverlayService.consumePendingClick(applicationContext)
+                ) {
+                    dispatchProcessingOverlayClicked(applicationContext)
+                }
+                result.success(null)
+            }
             "moveAppToBack" -> result.success(activity?.moveTaskToBack(true) == true)
             "configureAndroidWorkManager" -> configureAndroidWorkManager(call, result)
             "encryptReflectionString" -> encryptReflectionString(call, result)
@@ -2740,6 +2783,7 @@ class FlutterLocalNotificationPluginsPlugin :
             mediaImage = if (style == "media" || call.argument<String>("payload") == "media") styleImage else null,
             replaceExistingMedia = notificationDetails?.get("replaceExisting") == true,
             allowTimerOverlayStart = call.argument<Boolean>("showOverlay") ?: false,
+            suppressWhenAppForeground = false,
         )
         result.success(null)
     }
@@ -3033,17 +3077,9 @@ class FlutterLocalNotificationPluginsPlugin :
                     }
                 }
 
-                override fun onActivityResumed(activity: Activity) {
-                    if (activity.packageName == applicationContext.packageName) {
-                        hostActivityInForeground = true
-                    }
-                }
+                override fun onActivityResumed(activity: Activity) = Unit
 
-                override fun onActivityPaused(activity: Activity) {
-                    if (activity.packageName == applicationContext.packageName) {
-                        hostActivityInForeground = false
-                    }
-                }
+                override fun onActivityPaused(activity: Activity) = Unit
 
                 override fun onActivityStopped(activity: Activity) {
                     if (activity.packageName != applicationContext.packageName) return
@@ -3080,14 +3116,13 @@ class FlutterLocalNotificationPluginsPlugin :
         pendingBackgroundRunnable = null
         lifecycleHandler = null
         startedActivityCount.set(0)
-        hostActivityInForeground = false
+        processingOverlayClickListenerReady = false
         documentScannerActivityCount.set(0)
     }
 
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
         activityBinding = binding
         activity = binding.activity
-        hostActivityInForeground = true
         SessionBackgroundReporter.onForeground(applicationContext)
         binding.addOnNewIntentListener(this)
         binding.addActivityResultListener(this)

@@ -336,11 +336,27 @@ class TimerOverlayService : Service() {
                     clickType = clickType,
                     content = pendingDisplayContent,
                 )
+            val appForeground =
+                FlutterLocalNotificationPluginsPlugin.isHostActivityInForeground()
+            if (appForeground) {
+                val dispatched =
+                    TimerOverlayHelper.dispatchClickEvent(
+                        context = applicationContext,
+                        event = clickEvent,
+                    )
+                Log.d(
+                    TAG,
+                    "overlay clicked appForeground=true action=${if (dispatched) "dispatch_only" else "cache_only"}",
+                )
+                stopSelf()
+                return
+            }
             val started =
                 FlutterLocalNotificationPluginsPlugin.startTimerOverlayClickIntent(
                     context = applicationContext,
                     event = clickEvent,
                 )
+            Log.d(TAG, "overlay clicked appForeground=false action=launch_app started=$started")
             stopSelf()
             if (!started) {
                 TimerOverlayHelper.dispatchClickEvent(

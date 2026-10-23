@@ -18,6 +18,14 @@ class MethodChannelFlutterLocalNotificationPlugins
   VoidCallback? onProcessingOverlayClicked;
   ValueChanged<TimerOverlayClickEvent>? onTimerOverlayClicked;
 
+  /// 通知原生层进度悬浮窗点击监听已经就绪，并补发待处理点击。
+  Future<void> setProcessingOverlayClickListenerReady() {
+    return methodChannel.invokeMethod<void>(
+      'setProcessingOverlayClickListenerReady',
+      {'ready': true},
+    );
+  }
+
   MethodChannelFlutterLocalNotificationPlugins() {
     methodChannel.setMethodCallHandler(_handleMethodCall);
   }

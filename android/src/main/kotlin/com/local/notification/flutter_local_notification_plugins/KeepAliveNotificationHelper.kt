@@ -710,6 +710,13 @@ object KeepAliveNotificationHelper {
             Log.d(TAG, "showStoredLocalNotification skipped empty source=$source")
             return false
         }
+        if (FlutterLocalNotificationPluginsPlugin.isHostActivityInForeground()) {
+            Log.d(
+                TAG,
+                "showStoredLocalNotification skipped appForeground=true source=$source attachedMediaSkipped=true",
+            )
+            return false
+        }
         val raw = config.notificationList[Random.nextInt(config.notificationList.size)]
         val parts = raw.split("\u0001")
         val title = parts.getOrNull(0)

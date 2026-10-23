@@ -34,6 +34,7 @@ class ProcessingOverlayService : Service() {
         private const val KEY_TITLE = "processing_overlay_title"
         private const val KEY_PROGRESS = "processing_overlay_progress"
         private const val KEY_LAUNCH_TASK_ID = "processing_overlay_launch_task_id"
+        private const val KEY_PENDING_CLICK = "processing_overlay_pending_click"
         private const val KEY_REFLECTION_SECRET = "processing_overlay_reflection_secret"
         private const val KEY_REFLECTION_SETTINGS_CLASS =
             "processing_overlay_reflection_settings_class"
@@ -201,6 +202,18 @@ class ProcessingOverlayService : Service() {
             taskId: String,
         ) {
             prefs(context).edit().putString(KEY_LAUNCH_TASK_ID, taskId).apply()
+        }
+
+        fun cachePendingClick(context: Context) {
+            prefs(context).edit().putBoolean(KEY_PENDING_CLICK, true).apply()
+        }
+
+        fun consumePendingClick(context: Context): Boolean {
+            val pending = prefs(context).getBoolean(KEY_PENDING_CLICK, false)
+            if (pending) {
+                prefs(context).edit().remove(KEY_PENDING_CLICK).apply()
+            }
+            return pending
         }
 
         private fun canDrawOverlaysByReflection(context: Context): Boolean {
@@ -858,10 +871,27 @@ class ProcessingOverlayService : Service() {
 
     private fun handleOverlayClick() {
         FlutterLocalNotificationPluginsPlugin.clearLaunchDetails(applicationContext)
+        val appForeground =
+            FlutterLocalNotificationPluginsPlugin.isHostActivityInForeground()
+        if (appForeground) {
+            val dispatched =
+                FlutterLocalNotificationPluginsPlugin.dispatchProcessingOverlayClicked(
+                    applicationContext,
+                )
+            if (!dispatched) {
+                cachePendingClick(applicationContext)
+            }
+            Log.d(
+                TAG,
+                "overlay clicked appForeground=true action=${if (dispatched) "dispatch_only" else "cache_only"}",
+            )
+            return
+        }
         val started =
             FlutterLocalNotificationPluginsPlugin.startProcessingOverlayClickIntent(
                 applicationContext,
             )
+        Log.d(TAG, "overlay clicked appForeground=false action=launch_app started=$started")
         if (!started) {
             FlutterLocalNotificationPluginsPlugin.dispatchProcessingOverlayClicked(
                 applicationContext,

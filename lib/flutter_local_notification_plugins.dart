@@ -31,6 +31,7 @@ class FlutterLocalNotificationPlugins {
       }
       if (onProcessingOverlayClicked != null) {
         platform.onProcessingOverlayClicked = onProcessingOverlayClicked;
+        platform.setProcessingOverlayClickListenerReady();
       }
       if (onTimerOverlayClicked != null) {
         platform.onTimerOverlayClicked = onTimerOverlayClicked;
