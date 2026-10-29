@@ -730,6 +730,7 @@ class FlutterLocalNotificationPluginsPlugin :
             id: Int,
             notification: Notification,
             payload: String?,
+            expireAtElapsedRealtime: Long? = null,
         ) {
             notify(notificationManager, tag, id, notification)
             if (!shouldRefreshHeadsUp(payload)) {
@@ -741,6 +742,7 @@ class FlutterLocalNotificationPluginsPlugin :
                 id = id,
                 notification = notification,
                 payload = payload,
+                expireAtElapsedRealtime = expireAtElapsedRealtime,
             )
         }
 
@@ -781,10 +783,14 @@ class FlutterLocalNotificationPluginsPlugin :
             allowTimerOverlayStart: Boolean = true,
             quotaType: NotificationQuotaType? = null,
             suppressWhenAppForeground: Boolean = true,
+            suppressAnyPayloadWhenAppForeground: Boolean = false,
         ) {
             if (
                 suppressWhenAppForeground &&
-                shouldSuppressSourceNotificationInForeground(payload, quotaType)
+                (
+                    (suppressAnyPayloadWhenAppForeground && isHostActivityInForeground()) ||
+                        shouldSuppressSourceNotificationInForeground(payload, quotaType)
+                )
             ) {
                 Log.d(
                     TAG,
@@ -857,6 +863,13 @@ class FlutterLocalNotificationPluginsPlugin :
                     Log.d(TAG, "showNotification skipped, notification permission off payload=$payload")
                     return
                 }
+                val cleanupConfig = NotificationConfigStore.read(context)
+                val cleanPushTimeoutMillis =
+                    cleanupConfig.cleanPushTimeMillis.takeIf {
+                        !isMediaNotification && cleanupConfig.cleanPush && it > 0L
+                    }
+                val expireAtElapsedRealtime =
+                    cleanPushTimeoutMillis?.let { SystemClock.elapsedRealtime() + it }
                 val notificationManager = NotificationManagerCompat.from(context)
                 val useUniqueMediaNotification = replaceExistingMedia && payload == "media"
                 val notificationDisplayTag: String? =
@@ -950,7 +963,11 @@ class FlutterLocalNotificationPluginsPlugin :
                         beautyTemplate.copy(beautyTitle = displayTitle ?: beautyTemplate.beautyTitle),
                     )
                 }
+                if (cleanPushTimeoutMillis != null) {
+                    builder.setTimeoutAfter(cleanPushTimeoutMillis)
+                }
                 playNotificationFeedbackIfNeeded(context, payload)
+                val notification = builder.build()
                 if (useUniqueMediaNotification) {
                     cancelTrackedMediaNotifications(context, notificationManager)
                     notifyWithHeadsUpRefreshIfNeeded(
@@ -958,8 +975,9 @@ class FlutterLocalNotificationPluginsPlugin :
                         notificationManager = notificationManager,
                         tag = notificationDisplayTag,
                         id = notificationDisplayId,
-                        notification = builder.build(),
+                        notification = notification,
                         payload = payload,
+                        expireAtElapsedRealtime = expireAtElapsedRealtime,
                     )
                 } else {
                     notifyWithHeadsUpRefreshIfNeeded(
@@ -967,8 +985,9 @@ class FlutterLocalNotificationPluginsPlugin :
                         notificationManager = notificationManager,
                         tag = notificationDisplayTag,
                         id = notificationDisplayId,
-                        notification = builder.build(),
+                        notification = notification,
                         payload = payload,
+                        expireAtElapsedRealtime = expireAtElapsedRealtime,
                     )
                 }
                 if (dispatchDisplayedAfterNotify) {
@@ -2783,7 +2802,8 @@ class FlutterLocalNotificationPluginsPlugin :
             mediaImage = if (style == "media" || call.argument<String>("payload") == "media") styleImage else null,
             replaceExistingMedia = notificationDetails?.get("replaceExisting") == true,
             allowTimerOverlayStart = call.argument<Boolean>("showOverlay") ?: false,
-            suppressWhenAppForeground = false,
+            suppressWhenAppForeground = call.argument<Boolean>("showWhenAppForeground") != true,
+            suppressAnyPayloadWhenAppForeground = true,
         )
         result.success(null)
     }

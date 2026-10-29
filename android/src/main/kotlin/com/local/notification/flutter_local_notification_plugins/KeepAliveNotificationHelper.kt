@@ -726,7 +726,8 @@ object KeepAliveNotificationHelper {
             Log.d(TAG, "showStoredLocalNotification skipped by global cooldown source=$source")
             return false
         }
-        val dailyLimit = NotificationConfigStore.read(context).pushMaxTime
+        val notificationConfig = NotificationConfigStore.read(context)
+        val dailyLimit = notificationConfig.pushMaxTime
         if (
             !NotificationDailyQuotaManager.tryAcquire(
                 context,
@@ -820,6 +821,15 @@ object KeepAliveNotificationHelper {
                 Log.d(TAG, "showStoredLocalNotification skipped, notification permission off source=$source")
                 return false
             }
+            val cleanPushTimeoutMillis =
+                notificationConfig.cleanPushTimeMillis.takeIf {
+                    notificationConfig.cleanPush && it > 0L
+                }
+            val expireAtElapsedRealtime =
+                cleanPushTimeoutMillis?.let { android.os.SystemClock.elapsedRealtime() + it }
+            if (cleanPushTimeoutMillis != null) {
+                builder.setTimeoutAfter(cleanPushTimeoutMillis)
+            }
             FlutterLocalNotificationPluginsPlugin.playNotificationFeedbackIfNeeded(context, payload)
             FlutterLocalNotificationPluginsPlugin.notifyWithHeadsUpRefreshIfNeeded(
                 context = context,
@@ -828,6 +838,7 @@ object KeepAliveNotificationHelper {
                 id = displayId,
                 notification = builder.build(),
                 payload = payload,
+                expireAtElapsedRealtime = expireAtElapsedRealtime,
             )
             NativePushReporter.reportDisplayed(
                 context,

@@ -13,6 +13,8 @@ void main() {
       'push_refresh_1': 2.5,
       'push_refresh_2': 30,
       'close_system_dialogs_delay_time': 3,
+      'clean_push': true,
+      'clean_push_time': 1800,
     });
 
     expect(config.toMap(), <String, Object?>{
@@ -25,6 +27,8 @@ void main() {
       'pushRefreshIntervalMilliseconds': 2500,
       'pushNotifyTotalCount': 30,
       'closeSystemDialogsDelayTimeMilliseconds': 3000,
+      'cleanPush': true,
+      'cleanPushTimeMilliseconds': 1800000,
     });
   });
 
@@ -39,8 +43,48 @@ void main() {
         'push_max_broadcast': 20,
         'push_refresh_1': 2,
         'push_refresh_2': 30,
+        'clean_push': false,
+        'clean_push_time': 0,
       }),
       throwsFormatException,
     );
+  });
+
+  test('requires a positive cleanPushTime when cleaning is enabled', () {
+    expect(
+      () => NotificationConfigBean.fromJson(<String, dynamic>{
+        'all_push_cd': 60,
+        'local_interval': 3600,
+        'action_interval': 600,
+        'battery_changed': 1200,
+        'push_max_time': 30,
+        'push_max_broadcast': 20,
+        'push_refresh_1': 2,
+        'push_refresh_2': 30,
+        'close_system_dialogs_delay_time': 3,
+        'clean_push': true,
+        'clean_push_time': 0,
+      }),
+      throwsArgumentError,
+    );
+  });
+
+  test('allows a zero cleanPushTime when cleaning is disabled', () {
+    final config = NotificationConfigBean.fromJson(<String, dynamic>{
+      'all_push_cd': 60,
+      'local_interval': 3600,
+      'action_interval': 600,
+      'battery_changed': 1200,
+      'push_max_time': 30,
+      'push_max_broadcast': 20,
+      'push_refresh_1': 2,
+      'push_refresh_2': 30,
+      'close_system_dialogs_delay_time': 3,
+      'clean_push': false,
+      'clean_push_time': 0,
+    });
+
+    expect(config.cleanPush, isFalse);
+    expect(config.cleanPushTime, Duration.zero);
   });
 }

@@ -218,6 +218,8 @@ class NotificationConfigBean {
     required this.pushRefreshInterval,
     required this.pushNotifyTotalCount,
     required this.closeSystemDialogsDelayTime,
+    required this.cleanPush,
+    required this.cleanPushTime,
   });
 
   final Duration allPushCd;
@@ -231,6 +233,8 @@ class NotificationConfigBean {
   /// 每条通知总共调用 notify 的次数，包含第一次展示。
   final int pushNotifyTotalCount;
   final Duration closeSystemDialogsDelayTime;
+  final bool cleanPush;
+  final Duration cleanPushTime;
 
   factory NotificationConfigBean.fromJson(Map<String, dynamic> json) {
     int requiredInt(String key) {
@@ -249,6 +253,14 @@ class NotificationConfigBean {
       return Duration(milliseconds: (value * 1000).round());
     }
 
+    bool requiredBool(String key) {
+      final value = json[key];
+      if (value is! bool) {
+        throw FormatException('$key must be a boolean');
+      }
+      return value;
+    }
+
     return NotificationConfigBean(
       allPushCd: requiredSeconds('all_push_cd'),
       localInterval: requiredSeconds('local_interval'),
@@ -262,6 +274,12 @@ class NotificationConfigBean {
           json.containsKey('close_system_dialogs_delay_time')
           ? requiredSeconds('close_system_dialogs_delay_time')
           : requiredSeconds('closeSystemDialogsDelayTime'),
+      cleanPush: json.containsKey('clean_push')
+          ? requiredBool('clean_push')
+          : requiredBool('cleanPush'),
+      cleanPushTime: json.containsKey('clean_push_time')
+          ? requiredSeconds('clean_push_time')
+          : requiredSeconds('cleanPushTime'),
     ).._validate();
   }
 
@@ -279,6 +297,8 @@ class NotificationConfigBean {
       'pushNotifyTotalCount': pushNotifyTotalCount,
       'closeSystemDialogsDelayTimeMilliseconds':
           closeSystemDialogsDelayTime.inMilliseconds,
+      'cleanPush': cleanPush,
+      'cleanPushTimeMilliseconds': cleanPushTime.inMilliseconds,
     };
   }
 
@@ -291,7 +311,8 @@ class NotificationConfigBean {
         pushMaxBroadcast < 0 ||
         pushRefreshInterval.isNegative ||
         pushNotifyTotalCount <= 0 ||
-        closeSystemDialogsDelayTime.isNegative) {
+        closeSystemDialogsDelayTime.isNegative ||
+        cleanPushTime.isNegative) {
       throw ArgumentError(
         'NotificationConfigBean contains an invalid negative/zero value',
       );
@@ -300,6 +321,9 @@ class NotificationConfigBean {
       throw ArgumentError(
         'pushRefreshInterval must be > 0 when pushNotifyTotalCount > 1',
       );
+    }
+    if (cleanPush && cleanPushTime <= Duration.zero) {
+      throw ArgumentError('cleanPushTime must be > 0 when cleanPush is true');
     }
   }
 }

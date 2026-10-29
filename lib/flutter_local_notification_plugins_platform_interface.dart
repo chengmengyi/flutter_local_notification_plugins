@@ -329,6 +329,7 @@ abstract class FlutterLocalNotificationPluginsPlatform
     String? mediaBackgroundImageName,
     Map<String, Object?>? notificationDetails,
     bool showOverlay = false,
+    bool showWhenAppForeground = false,
   }) {
     throw UnimplementedError('show() has not been implemented.');
   }

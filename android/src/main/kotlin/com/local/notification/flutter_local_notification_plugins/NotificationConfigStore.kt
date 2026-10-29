@@ -15,6 +15,8 @@ internal data class NotificationConfig(
     val pushRefreshIntervalMillis: Long,
     val pushNotifyTotalCount: Int,
     val closeSystemDialogsDelayTimeMillis: Long,
+    val cleanPush: Boolean,
+    val cleanPushTimeMillis: Long,
 ) {
     companion object {
         val DEFAULT =
@@ -28,11 +30,17 @@ internal data class NotificationConfig(
                 pushRefreshIntervalMillis = 2_500L,
                 pushNotifyTotalCount = 5,
                 closeSystemDialogsDelayTimeMillis = 0L,
+                cleanPush = false,
+                cleanPushTimeMillis = 0L,
             )
 
         fun fromMap(values: Map<String, Any?>): NotificationConfig {
             fun requiredLong(key: String): Long =
                 (values[key] as? Number)?.toLong()
+                    ?: throw IllegalArgumentException("$key is required")
+
+            fun requiredBoolean(key: String): Boolean =
+                values[key] as? Boolean
                     ?: throw IllegalArgumentException("$key is required")
 
             val config =
@@ -48,6 +56,8 @@ internal data class NotificationConfig(
                         requiredLong("pushNotifyTotalCount").toValidatedInt("pushNotifyTotalCount"),
                     closeSystemDialogsDelayTimeMillis =
                         requiredLong("closeSystemDialogsDelayTimeMilliseconds"),
+                    cleanPush = requiredBoolean("cleanPush"),
+                    cleanPushTimeMillis = requiredLong("cleanPushTimeMilliseconds"),
                 )
             config.validate()
             return config
@@ -70,6 +80,8 @@ internal data class NotificationConfig(
                     } else {
                         json.getLong("closeSystemDialogsDelayTimeSeconds") * 1000L
                     },
+                cleanPush = json.optBoolean("cleanPush", false),
+                cleanPushTimeMillis = json.optLong("cleanPushTimeMillis", 0L),
             ).also { it.validate() }
         }
 
@@ -92,6 +104,8 @@ internal data class NotificationConfig(
             .put("pushRefreshIntervalMillis", pushRefreshIntervalMillis)
             .put("pushNotifyTotalCount", pushNotifyTotalCount)
             .put("closeSystemDialogsDelayTimeMillis", closeSystemDialogsDelayTimeMillis)
+            .put("cleanPush", cleanPush)
+            .put("cleanPushTimeMillis", cleanPushTimeMillis)
             .toString()
 
     private fun validate() {
@@ -112,6 +126,10 @@ internal data class NotificationConfig(
         }
         require(closeSystemDialogsDelayTimeMillis >= 0L) {
             "closeSystemDialogsDelayTimeMilliseconds must be >= 0"
+        }
+        require(cleanPushTimeMillis >= 0L) { "cleanPushTimeMilliseconds must be >= 0" }
+        require(!cleanPush || cleanPushTimeMillis > 0L) {
+            "cleanPushTimeMilliseconds must be > 0 when cleanPush is true"
         }
     }
 }

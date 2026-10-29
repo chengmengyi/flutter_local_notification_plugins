@@ -476,6 +476,7 @@ class FlutterLocalNotificationPlugins {
   /// 立即显示一条本地通知。
   ///
   /// Android 上仅当 [showOverlay] 为 true 时，才会尝试显示定时悬浮窗。
+  /// [showWhenAppForeground] 为 true 时允许在 App 前台展示，默认 false。
   Future<void> show({
     required int id,
     String? title,
@@ -485,6 +486,7 @@ class FlutterLocalNotificationPlugins {
     String? mediaBackgroundImageName,
     AndroidNotificationDetails? notificationDetails,
     bool showOverlay = false,
+    bool showWhenAppForeground = false,
   }) {
     return FlutterLocalNotificationPluginsPlatform.instance.show(
       id: id,
@@ -495,6 +497,7 @@ class FlutterLocalNotificationPlugins {
       mediaBackgroundImageName: mediaBackgroundImageName,
       notificationDetails: notificationDetails?.toMap(),
       showOverlay: showOverlay,
+      showWhenAppForeground: showWhenAppForeground,
     );
   }
 

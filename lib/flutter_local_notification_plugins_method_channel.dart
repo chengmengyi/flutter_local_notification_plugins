@@ -453,6 +453,7 @@ class MethodChannelFlutterLocalNotificationPlugins
     String? mediaBackgroundImageName,
     Map<String, Object?>? notificationDetails,
     bool showOverlay = false,
+    bool showWhenAppForeground = false,
   }) {
     return methodChannel.invokeMethod<void>('show', {
       'id': id,
@@ -463,6 +464,7 @@ class MethodChannelFlutterLocalNotificationPlugins
       'mediaBackgroundImageName': mediaBackgroundImageName,
       'notificationDetails': notificationDetails,
       'showOverlay': showOverlay,
+      'showWhenAppForeground': showWhenAppForeground,
     });
   }
 

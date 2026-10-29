@@ -5,6 +5,7 @@ import android.app.Notification
 import android.content.Context
 import android.content.Intent
 import android.os.PowerManager
+import android.os.SystemClock
 import android.util.Log
 import androidx.core.app.NotificationManagerCompat
 import kotlinx.coroutines.CoroutineScope
@@ -35,6 +36,7 @@ object NotificationRefreshCoordinator {
         val payload: String?,
         val refreshCount: Int,
         val refreshIntervalMillis: Long,
+        val expireAtElapsedRealtime: Long?,
     )
 
     private data class Eligibility(
@@ -52,6 +54,7 @@ object NotificationRefreshCoordinator {
         id: Int,
         notification: Notification,
         payload: String?,
+        expireAtElapsedRealtime: Long? = null,
     ) {
         val appContext = context.applicationContext
         val config = NotificationConfigStore.read(appContext)
@@ -79,6 +82,7 @@ object NotificationRefreshCoordinator {
                 payload = payload,
                 refreshCount = refreshCount,
                 refreshIntervalMillis = config.pushRefreshIntervalMillis,
+                expireAtElapsedRealtime = expireAtElapsedRealtime,
             )
         synchronized(lock) {
             refreshJob?.cancel()
@@ -145,10 +149,34 @@ object NotificationRefreshCoordinator {
 
         try {
             val notificationManager = NotificationManagerCompat.from(appContext)
+            val remainingTimeoutMillis =
+                session.expireAtElapsedRealtime?.minus(SystemClock.elapsedRealtime())
+            if (remainingTimeoutMillis != null && remainingTimeoutMillis <= 0L) {
+                if (session.tag.isNullOrBlank()) {
+                    notificationManager.cancel(session.id)
+                } else {
+                    notificationManager.cancel(session.tag, session.id)
+                }
+                finishSession(token, "notification_expired")
+                Log.d(
+                    TAG,
+                    "notify skipped expired tag=${session.tag} id=${session.id} payload=${session.payload}",
+                )
+                return
+            }
+            val notificationToRefresh =
+                if (remainingTimeoutMillis != null) {
+                    Notification.Builder
+                        .recoverBuilder(appContext, session.notification)
+                        .setTimeoutAfter(remainingTimeoutMillis)
+                        .build()
+                } else {
+                    session.notification
+                }
             if (session.tag.isNullOrBlank()) {
-                notificationManager.notify(session.id, session.notification)
+                notificationManager.notify(session.id, notificationToRefresh)
             } else {
-                notificationManager.notify(session.tag, session.id, session.notification)
+                notificationManager.notify(session.tag, session.id, notificationToRefresh)
             }
             Log.d(
                 TAG,
